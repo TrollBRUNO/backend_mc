@@ -12,7 +12,7 @@ export class News {
   description: string;
 
   @Prop({ default: Date.now })
-  createdAt: Date;
+  create_date: Date;
 
   @Prop()
   image_url: string;
