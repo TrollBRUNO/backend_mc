@@ -11,11 +11,6 @@ export class NewsService {
     @InjectModel(News.name) private newsModel: Model<NewsDocument>,
   ) {}
 
-  async create(dto: CreateNewsDto): Promise<News> {
-    const news = new this.newsModel(dto);
-    return news.save();
-  }
-
   async findAll(): Promise<News[]> {
     return this.newsModel.find().sort({ create_date: -1 }).exec();
   }
@@ -24,7 +19,12 @@ export class NewsService {
     const doc = await this.newsModel.findById(id).exec();
     if (!doc) throw new NotFoundException(`News ${id} not found`);
     return doc;
-  }   
+  }  
+
+  async create(dto: CreateNewsDto): Promise<News> {
+    const news = new this.newsModel(dto);
+    return news.save();
+  } 
 
   async update(id: string, dto: UpdateNewsDto): Promise<News> {
     const updated = await this.newsModel.findByIdAndUpdate(id, dto, { new: true }).exec();
@@ -32,7 +32,7 @@ export class NewsService {
     return updated;
   }   
 
-  async remove(id: string): Promise<News> {
+  async delete(id: string): Promise<News> {
     const deleted = await this.newsModel.findByIdAndDelete(id).exec();
     if (!deleted) throw new NotFoundException(`News ${id} not found`);
     return deleted;
