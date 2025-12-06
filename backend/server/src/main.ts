@@ -43,7 +43,7 @@ async function bootstrap() {
     prefix: '/uploads/', // URL будет http://localhost:3000/uploads/filename.jpg
   });
 
-  app.enableCors({ origin: 'http://localhost:38821' }); 
+  app.enableCors({ origin: 'http://localhost:33975' }); 
   
   await app.listen(3000, '0.0.0.0');
 }
