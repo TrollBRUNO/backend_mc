@@ -6,8 +6,8 @@ import { GalleryController } from './gallery.controller';
 
 @Module({
   imports: [
-      MongooseModule.forFeature([{ name: Gallery.name, schema: GallerySchema }])
-    ],
+    MongooseModule.forFeature([{ name: Gallery.name, schema: GallerySchema }])
+  ],
   providers: [GalleryService],
   controllers: [GalleryController]
 })
