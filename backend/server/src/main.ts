@@ -35,7 +35,9 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   app.enableCors({
-    origin: '*', // для теста можно так, потом ограничить домен
+    origin: '*',
+    methods: '*',
+    allowedHeaders: '*',
   });
 
   // Статические файлы (картинки)
@@ -43,7 +45,7 @@ async function bootstrap() {
     prefix: '/uploads/', // URL будет http://localhost:3000/uploads/filename.jpg
   });
 
-  app.enableCors({ origin: 'http://localhost:45347' }); 
+  //app.enableCors({ origin: 'http://localhost:41966' }); 
   
   await app.listen(3000, '0.0.0.0');
 }
