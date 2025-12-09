@@ -22,6 +22,9 @@ export class Casino {
 
   @Prop()
   image_url: string;
+
+  @Prop({ type: [String], default: [] })
+  uu_id_list: string[];
 }
 
 export const CasinoSchema = SchemaFactory.createForClass(Casino);

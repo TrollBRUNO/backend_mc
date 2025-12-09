@@ -58,6 +58,7 @@ export class CasinoController {
       mystery_progressive: body.mystery_progressive,
       jackpot_url: body.jackpot_url,
       image_url: imageUrl,
+      uu_id_list: body.uu_id_list,
     });
   }
 
