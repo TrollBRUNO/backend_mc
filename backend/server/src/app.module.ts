@@ -5,6 +5,9 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { NewsModule } from './news/news.module';
 import { GalleryModule } from './gallery/gallery.module';
 import { CasinoModule } from './casino/casino.module';
+import { AccountModule } from './account/account.module';
+import { SupportModule } from './support/support.module';
+import { StatisticsModule } from './statistics/statistics.module';
 
 @Module({
   imports: [
@@ -12,6 +15,9 @@ import { CasinoModule } from './casino/casino.module';
     NewsModule,
     GalleryModule,
     CasinoModule,
+    AccountModule,
+    SupportModule,
+    StatisticsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
