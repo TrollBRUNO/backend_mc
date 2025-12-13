@@ -26,6 +26,28 @@ export class Account {
   @Prop()
   apple_id: string;
 
+  @Prop({
+    type: [
+      {
+        card_id: String,
+        city: String,
+        active: Boolean
+      }
+    ],
+    default: []
+  })
+  cards: {
+    card_id: string;
+    city: string;
+    active: boolean;
+  }[];
+
+  @Prop()
+  bonus_code: string;
+
+  @Prop()
+  bonus_code_expire: Date;
+
   @Prop({ default: Date.now })
   create_date: Date;
 

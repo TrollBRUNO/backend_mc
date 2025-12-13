@@ -8,6 +8,7 @@ import {
   Param,
   UseInterceptors,
   UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -20,6 +21,67 @@ import { v4 as uuid } from 'uuid';
 export class AccountController {
   constructor(private readonly accountService: AccountService) {}
 
+  // ----------------------------------------------------------
+  // 1) generateBonusCode
+  // ----------------------------------------------------------
+  @Post(':id/generate-bonus')
+  async generateBonusCode(@Param('id') accountId: string) {
+    const code = await this.accountService.generateBonusCode(accountId);
+    return { success: true, bonus_code: code };
+  }
+
+  // ----------------------------------------------------------
+  // 2) verifyBonusCode
+  // ----------------------------------------------------------
+  @Post(':id/verify-bonus')
+  async verifyBonusCode(
+    @Param('id') accountId: string,
+    @Body('card_id') card_id: string,
+    @Body('code') code: string,
+  ) {
+    if (!card_id || !code) throw new BadRequestException('card_id and code are required');
+
+    return await this.accountService.verifyBonusCode(accountId, card_id, code);
+  }
+
+
+  // ----------------------------------------------------------
+  // 3) bindCard — привязка карты
+  // ----------------------------------------------------------
+  @Post(':id/bind-card')
+  async bindCard(
+    @Param('id') accountId: string,
+    @Body('card_id') card_id: string,
+    @Body('city') city: string,
+  ) {
+    if (!card_id || !city)
+      throw new BadRequestException('card_id and city are required');
+
+    const result = await this.accountService.bindCard(accountId, card_id, city);
+    return { success: true, card: result };
+  }
+
+  // ----------------------------------------------------------
+  // 4) listCards
+  // ----------------------------------------------------------
+  @Get(':id/cards')
+  async listCards(@Param('id') accountId: string) {
+    const cards = await this.accountService.listCards(accountId);
+    return { success: true, cards };
+  }
+
+  // ----------------------------------------------------------
+  // 5) removeCard
+  // ----------------------------------------------------------
+  @Delete(':id/cards/:cardId')
+  async removeCard(
+    @Param('id') accountId: string,
+    @Param('cardId') cardId: string,
+  ) {
+    const result = await this.accountService.removeCard(accountId, cardId);
+    return { success: true, removed: result };
+  }
+  
   // ---------- GET ALL ----------
   @Get()
   findAll() {

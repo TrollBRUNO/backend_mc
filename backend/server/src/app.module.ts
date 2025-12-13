@@ -8,6 +8,7 @@ import { CasinoModule } from './casino/casino.module';
 import { AccountModule } from './account/account.module';
 import { SupportModule } from './support/support.module';
 import { StatisticsModule } from './statistics/statistics.module';
+import { WheelModule } from './wheel/wheel.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { StatisticsModule } from './statistics/statistics.module';
     AccountModule,
     SupportModule,
     StatisticsModule,
+    WheelModule,
   ],
   controllers: [AppController],
   providers: [AppService],
