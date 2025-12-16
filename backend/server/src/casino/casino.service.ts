@@ -11,6 +11,10 @@ export class CasinoService {
     @InjectModel(Casino.name) private casinoModel: Model<CasinoDocument>,
   ) {}
 
+  async getCities(): Promise<string[]> {
+    return this.casinoModel.distinct('city');
+  }
+  
   async findAll(): Promise<Casino[]> {
     return this.casinoModel.find().sort({ create_date: -1 }).exec();
   }

@@ -14,11 +14,14 @@ export class Account {
   @Prop({ type: Types.Decimal128, default: 0 })
   fake_balance: Types.Decimal128;
 
-  @Prop()
+  @Prop({ unique: true, index: true })
   login: string;
 
   @Prop()
   password: string;
+
+  @Prop()
+  realname: string;
 
   @Prop()
   google_id: string;

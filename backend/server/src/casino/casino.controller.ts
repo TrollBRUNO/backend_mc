@@ -26,6 +26,12 @@ export class CasinoController {
     return this.casinoService.findAll();
   }
 
+  // ---------- GET CITIES ----------
+  @Get('cities')
+  async getCities() {
+    return this.casinoService.getCities();
+  }
+
   // ---------- GET ONE ----------
   @Get(':id')
   findOne(@Param('id') id: string) {
@@ -89,8 +95,6 @@ export class CasinoController {
       };
     }
   }
-
-
 
   // ---------- CREATE через JSON (уже загруженные файлы) ----------
   @Post('json')

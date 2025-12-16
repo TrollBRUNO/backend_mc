@@ -82,6 +82,20 @@ export class AccountController {
     return { success: true, removed: result };
   }
   
+  // ----------------------------------------------------------
+  // 6) checkCard
+  // ----------------------------------------------------------
+  @Post('check-card')
+  async checkCard(@Body('card_id') cardId: string) {
+    if (!cardId) {
+      throw new BadRequestException('card_id_required');
+    }
+
+    await this.accountService.checkCardAvailability(cardId);
+
+    return { ok: true };
+  }
+
   // ---------- GET ALL ----------
   @Get()
   findAll() {
@@ -92,6 +106,23 @@ export class AccountController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.accountService.findOne(id);
+  }
+
+  // ---------- REGISTER ----------
+  @Post('register')
+  async register(@Body() dto: any) {
+    const { login, password, realname, cards } = dto;
+
+    if (!login || !password || !realname) {
+      throw new BadRequestException('MISSING_FIELDS');
+    }
+
+    return await this.accountService.register({
+      login,
+      password,
+      realname,
+      cards,
+    });
   }
 
   // ---------- CREATE (multipart/form-data для файла) ----------

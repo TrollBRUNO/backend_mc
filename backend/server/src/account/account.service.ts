@@ -38,6 +38,43 @@ export class AccountService {
     return deleted;
   }   
 
+  async register(dto: {
+    login: string;
+    password: string;
+    realname: string;
+    cards?: {
+      card_id: string;
+      city: string;
+      active: boolean;
+    }[];
+  }) {
+    // 1️⃣ username уникален
+    const loginExists = await this.accountModel.findOne({
+      login: dto.login,
+    });
+
+    if (loginExists) {
+      throw new BadRequestException('USERNAME_TAKEN');
+    }
+
+    // 2️⃣ карта уникальна
+    if (dto.cards?.length) {
+      const cardId = dto.cards[0].card_id;
+      await this.checkCardAvailability(cardId);
+    }
+
+    const account = new this.accountModel({
+      login: dto.login,
+      password: dto.password, // ⚠️ позже bcrypt
+      realname: dto.realname,
+      cards: dto.cards ?? [],
+    });
+
+    await account.save();
+
+    return { success: true };
+  }
+
   async generateBonusCode(accountId: string): Promise<string> {
     const account = await this.accountModel.findById(accountId);
 
@@ -105,20 +142,8 @@ export class AccountService {
     };
   }
 
-
-
   async bindCard(accountId: string, card_id: string, city: string) {
-    // Проверка, используется ли карта
-    const exists = await this.accountModel.findOne({
-      "cards.card_id": card_id,
-      "cards.active": true,
-    });
-
-    if (exists) {
-      throw new BadRequestException(
-        'This card is already linked to another account.',
-      );
-    }
+    await this.checkCardAvailability(card_id);
 
     const account = await this.accountModel.findById(accountId);
     if (!account) throw new NotFoundException('Account not found');
@@ -154,5 +179,16 @@ export class AccountService {
 
     await account.save();
     return card;
+  }
+
+  async checkCardAvailability(cardId: string): Promise<void> {
+    const exists = await this.accountModel.findOne({
+      'cards.card_id': cardId,
+      'cards.active': true,
+    });
+
+    if (exists) {
+      throw new BadRequestException('CARD_ALREADY_USED');
+    }
   }
 }
