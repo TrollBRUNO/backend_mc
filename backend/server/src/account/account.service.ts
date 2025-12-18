@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { Account, AccountDocument } from './account.schema';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AccountService {
@@ -38,6 +39,21 @@ export class AccountService {
     return deleted;
   }   
 
+  async getProfile(accountId: string) {
+    const account = await this.accountModel.findById(accountId);
+    if (!account) throw new NotFoundException('Account not found');
+
+    return {
+      login: account.login,
+      realname: account.realname,
+      balance: account.balance,
+      bonus_balance: account.bonus_balance,
+      credit_balance: account.fake_balance,
+      image_url: account.image_url,
+      cards: account.cards,
+    };
+  }
+
   async register(dto: {
     login: string;
     password: string;
@@ -63,9 +79,11 @@ export class AccountService {
       await this.checkCardAvailability(cardId);
     }
 
+    const hash = await bcrypt.hash(dto.password, 10);
+    
     const account = new this.accountModel({
       login: dto.login,
-      password: dto.password, // ⚠️ позже bcrypt
+      password: hash,
       realname: dto.realname,
       cards: dto.cards ?? [],
     });
@@ -130,8 +148,8 @@ export class AccountService {
     account.bonus_balance = 0 as any;
 
     // 6. Сбрасываем код (исправлено!)
-    account.bonus_code == null;
-    account.bonus_code_expire == null;
+    account.bonus_code = null;
+    account.bonus_code_expire = null;
 
     await account.save();
 

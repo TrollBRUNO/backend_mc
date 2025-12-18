@@ -45,11 +45,11 @@ export class Account {
     active: boolean;
   }[];
 
-  @Prop()
-  bonus_code: string;
+  @Prop({ default: null })
+  bonus_code: string | null;
 
-  @Prop()
-  bonus_code_expire: Date;
+  @Prop({ default: null })
+  bonus_code_expire: Date | null;
 
   @Prop({ default: Date.now })
   create_date: Date;
@@ -65,6 +65,11 @@ export class Account {
 
   @Prop({ default: '' })
   block_reason: string;
+
+  // Для реализации механизма инвалидирования JWT токенов при смене пароля и т.п.
+  @Prop({ default: 0 })
+  token_version: number;
+
 }
 
 export const AccountSchema = SchemaFactory.createForClass(Account);

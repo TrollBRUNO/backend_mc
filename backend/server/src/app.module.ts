@@ -9,6 +9,7 @@ import { AccountModule } from './account/account.module';
 import { SupportModule } from './support/support.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { WheelModule } from './wheel/wheel.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { WheelModule } from './wheel/wheel.module';
     SupportModule,
     StatisticsModule,
     WheelModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

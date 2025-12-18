@@ -16,7 +16,10 @@ import { diskStorage } from 'multer';
 import { AccountService } from './account.service';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Req, UseGuards } from '@nestjs/common/decorators';
 
+@UseGuards(JwtAuthGuard)
 @Controller('account')
 export class AccountController {
   constructor(private readonly accountService: AccountService) {}
@@ -123,6 +126,22 @@ export class AccountController {
       realname,
       cards,
     });
+  }
+
+  // ---------- SHOW PROFILE ----------
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  async me(@Req() req) {
+    const account = await this.accountService.findOne(req.user.sub);
+
+    return {
+      login: account.login,
+      realname: account.realname,
+      balance: account.balance ?? 0,
+      bonus_balance: account.bonus_balance ?? 0,
+      credit_balance: account.fake_balance ?? 0,
+      image_url: account.image_url,
+    };
   }
 
   // ---------- CREATE (multipart/form-data для файла) ----------
