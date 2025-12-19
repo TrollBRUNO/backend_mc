@@ -1,6 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { Account, AccountDocument } from '../account/account.schema';
+import { Statistics, StatisticsDocument } from '../statistics/statistics.schema';
 import { Wheel, WheelDocument } from './wheel.schema';
 import { CreateWheelDto } from './dto/create-wheel.dto';
 import { UpdateWheelDto } from './dto/update-wheel.dto';
@@ -9,6 +11,8 @@ import { UpdateWheelDto } from './dto/update-wheel.dto';
 export class WheelService {
   constructor(
     @InjectModel(Wheel.name) private wheelModel: Model<WheelDocument>,
+    @InjectModel(Account.name) private accountModel: Model<AccountDocument>,
+    @InjectModel(Statistics.name) private statModel: Model<StatisticsDocument>,
   ) {}
 
   async findAll(): Promise<Wheel[]> {
@@ -38,20 +42,45 @@ export class WheelService {
     return deleted;
   }   
 
-  async spin() {
-    const items = await this.wheelModel.find().exec();
+  async spin(accountId: string, wheel: number[]) {
+    const account = await this.accountModel.findById(accountId);
+    if (!account) throw new NotFoundException('Account not found');
 
-    if (!items.length) {
-      throw new NotFoundException('Wheel is empty');
+    const now = new Date();
+
+    // ---------- canSpin ----------
+    if (account.last_spin_date) {
+      const diff = now.getTime() - account.last_spin_date.getTime();
+      if (diff < 24 * 60 * 60 * 1000) {
+        throw new BadRequestException('SPIN_NOT_AVAILABLE');
+      }
     }
 
-    const randomIndex = Math.floor(Math.random() * items.length);
-    const selected = items[randomIndex];
+    // ---------- выбор приза ----------
+    const index = Math.floor(Math.random() * wheel.length);
+    const prize = wheel[index];
+
+    // ---------- начисляем бонус ----------
+    const currentBonus = Number(account.bonus_balance?.toString() ?? 0);
+    account.bonus_balance = (currentBonus + prize) as any;
+
+    // ---------- обновляем дату ----------
+    account.last_spin_date = now;
+
+    await account.save();
+
+    // ---------- статистика ----------
+    await this.statModel.create({
+      user_id: accountId,
+      prize_count: prize,
+      spin_date: now,
+    });
 
     return {
-      index: randomIndex,
-      value: selected.value,
-      id: selected._id,
+      index,
+      prize,
+      bonus_balance: account.bonus_balance,
+      spin_date: now,
     };
   }
 }

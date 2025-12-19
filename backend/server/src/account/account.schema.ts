@@ -23,11 +23,11 @@ export class Account {
   @Prop()
   realname: string;
 
-  @Prop()
-  google_id: string;
+  @Prop({ type: String, default: null, sparse: true})
+  google_id: string | null;
 
-  @Prop()
-  apple_id: string;
+  @Prop({ type: String, default: null, sparse: true})
+  apple_id: string | null;
 
   @Prop({
     type: [
@@ -45,17 +45,17 @@ export class Account {
     active: boolean;
   }[];
 
-  @Prop({ default: null })
+  @Prop({ type: String, default: null })
   bonus_code: string | null;
 
-  @Prop({ default: null })
+  @Prop({ type: Date, default: null })
   bonus_code_expire: Date | null;
-
-  @Prop({ default: Date.now })
-  create_date: Date;
 
   @Prop()
   last_spin_date: Date;
+
+  @Prop({ type: Date, default: null })
+  last_credit_take_date: Date | null; 
 
   @Prop({ default: "profile4.png" })
   image_url: string;

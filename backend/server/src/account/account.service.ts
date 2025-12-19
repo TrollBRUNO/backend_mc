@@ -209,4 +209,67 @@ export class AccountService {
       throw new BadRequestException('CARD_ALREADY_USED');
     }
   }
+
+  async canSpin(accountId: string): Promise<{ canSpin: boolean; nextSpin?: Date }> {
+    const account = await this.accountModel.findById(accountId);
+    if (!account) throw new NotFoundException('Account not found');
+
+    const now = new Date();
+    const lastSpin = account.last_spin_date;
+    const bonus = Number(account.bonus_balance?.toString() ?? 0);
+
+    // Если бонус не забрали > 24 часа — сгорает
+    if (lastSpin && account.bonus_balance && bonus > 0) {
+      const diff = now.getTime() - lastSpin.getTime();
+      if (diff >= 24 * 60 * 60 * 1000) {
+        account.bonus_balance = 0 as any;
+        await account.save();
+      }
+    }
+
+    // Можно ли крутить колесо?
+    if (!lastSpin) return { canSpin: true };
+
+    const diff = now.getTime() - lastSpin.getTime();
+    if (diff >= 24 * 60 * 60 * 1000) {
+      return { canSpin: true };
+    } else {
+      return { canSpin: false, nextSpin: new Date(lastSpin.getTime() + 24 * 60 * 60 * 1000) };
+    }
+  }
+
+  //Получение fake_balance (TakeCredit/CreditTake) раз в 24 часа
+  async canTakeCredit(accountId: string): Promise<{ canTake: boolean; nextTake?: Date }> {
+    const account = await this.accountModel.findById(accountId);
+    if (!account) throw new NotFoundException('Account not found');
+
+    const lastCredit = account.last_credit_take_date; // добавить в схему поле Date | null
+    const now = new Date();
+
+    if (!lastCredit) return { canTake: true };
+
+    const diff = now.getTime() - lastCredit.getTime();
+    if (diff >= 24 * 60 * 60 * 1000) {
+      return { canTake: true };
+    } else {
+      return { canTake: false, nextTake: new Date(lastCredit.getTime() + 24 * 60 * 60 * 1000) };
+    }
+  }
+
+  //Фактическое начисление fake_balance
+  async takeCredit(accountId: string, amount: number = 1000) {
+    const account = await this.accountModel.findById(accountId);
+    if (!account) throw new NotFoundException('Account not found');
+
+    const canTake = await this.canTakeCredit(accountId);
+    if (!canTake.canTake) {
+      throw new BadRequestException('Credit not available yet');
+    }
+
+    account.fake_balance = (Number(account.fake_balance?.toString() || 0) + amount) as any;
+    account.last_credit_take_date = new Date(); // обязательно добавить поле в схему
+    await account.save();
+
+    return { success: true, fake_balance: account.fake_balance };
+  }
 }

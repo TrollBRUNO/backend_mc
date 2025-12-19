@@ -67,51 +67,55 @@ export class AuthService {
   }
 
   async refresh(refreshToken: string) {
-    const payload = this.jwtService.verify(refreshToken);
+    try {
+      const payload = this.jwtService.verify(refreshToken);
+    
+      const hash = this.hashToken(refreshToken);
 
-    const hash = this.hashToken(refreshToken);
+      const session = await this.refreshModel.findOne({
+        refresh_token_hash: hash,
+        revoked: false,
+      });
 
-    const session = await this.refreshModel.findOne({
-      refresh_token_hash: hash,
-      revoked: false,
-    });
+      if (!session) {
+        throw new UnauthorizedException('INVALID_REFRESH_TOKEN');
+      }
 
-    if (!session) {
+      if (session.expires_at < new Date()) {
+        throw new UnauthorizedException('REFRESH_EXPIRED');
+      }
+
+      // 🔁 ROTATION
+      session.revoked = true;
+      await session.save();
+
+      const newPayload = {
+        sub: payload.sub,
+        role: payload.role,
+        token_version: payload.token_version,
+      };
+
+      const newAccessToken = this.jwtService.sign(newPayload, {
+        expiresIn: '10m',
+      });
+
+      const newRefreshToken = this.jwtService.sign(newPayload, {
+        expiresIn: '30d',
+      });
+
+      await this.refreshModel.create({
+        account_id: session.account_id,
+        refresh_token_hash: this.hashToken(newRefreshToken),
+        expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      });
+
+      return {
+        access_token: newAccessToken,
+        refresh_token: newRefreshToken,
+      };
+    } catch {
       throw new UnauthorizedException('INVALID_REFRESH_TOKEN');
     }
-
-    if (session.expires_at < new Date()) {
-      throw new UnauthorizedException('REFRESH_EXPIRED');
-    }
-
-    // 🔁 ROTATION
-    session.revoked = true;
-    await session.save();
-
-    const newPayload = {
-      sub: payload.sub,
-      role: payload.role,
-      token_version: payload.token_version,
-    };
-
-    const newAccessToken = this.jwtService.sign(newPayload, {
-      expiresIn: '10m',
-    });
-
-    const newRefreshToken = this.jwtService.sign(newPayload, {
-      expiresIn: '30d',
-    });
-
-    await this.refreshModel.create({
-      account_id: session.account_id,
-      refresh_token_hash: this.hashToken(newRefreshToken),
-      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    });
-
-    return {
-      access_token: newAccessToken,
-      refresh_token: newRefreshToken,
-    };
   }
 
   async logout(refreshToken: string) {

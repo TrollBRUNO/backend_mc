@@ -19,7 +19,6 @@ import { v4 as uuid } from 'uuid';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Req, UseGuards } from '@nestjs/common/decorators';
 
-@UseGuards(JwtAuthGuard)
 @Controller('account')
 export class AccountController {
   constructor(private readonly accountService: AccountService) {}
@@ -27,6 +26,7 @@ export class AccountController {
   // ----------------------------------------------------------
   // 1) generateBonusCode
   // ----------------------------------------------------------
+  @UseGuards(JwtAuthGuard)
   @Post(':id/generate-bonus')
   async generateBonusCode(@Param('id') accountId: string) {
     const code = await this.accountService.generateBonusCode(accountId);
@@ -36,6 +36,7 @@ export class AccountController {
   // ----------------------------------------------------------
   // 2) verifyBonusCode
   // ----------------------------------------------------------
+  @UseGuards(JwtAuthGuard)
   @Post(':id/verify-bonus')
   async verifyBonusCode(
     @Param('id') accountId: string,
@@ -51,6 +52,7 @@ export class AccountController {
   // ----------------------------------------------------------
   // 3) bindCard — привязка карты
   // ----------------------------------------------------------
+  @UseGuards(JwtAuthGuard)
   @Post(':id/bind-card')
   async bindCard(
     @Param('id') accountId: string,
@@ -76,6 +78,7 @@ export class AccountController {
   // ----------------------------------------------------------
   // 5) removeCard
   // ----------------------------------------------------------
+  @UseGuards(JwtAuthGuard)
   @Delete(':id/cards/:cardId')
   async removeCard(
     @Param('id') accountId: string,
@@ -99,6 +102,13 @@ export class AccountController {
     return { ok: true };
   }
 
+  // ---------- CAN SPIN ----------
+  @Get(':id/can-spin')
+  async canSpin(@Param('id') accountId: string) {
+    const result = await this.accountService.canSpin(accountId);
+    return result;
+  }
+
   // ---------- GET ALL ----------
   @Get()
   findAll() {
@@ -106,10 +116,11 @@ export class AccountController {
   }
 
   // ---------- GET ONE ----------
+  /* @UseGuards(JwtAuthGuard)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.accountService.findOne(id);
-  }
+  } */
 
   // ---------- REGISTER ----------
   @Post('register')

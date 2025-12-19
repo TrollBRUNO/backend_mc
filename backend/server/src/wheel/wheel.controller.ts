@@ -6,6 +6,8 @@ import {
   Delete,
   Body,
   Param,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -13,6 +15,7 @@ import { diskStorage } from 'multer';
 import { WheelService } from './wheel.service';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 @Controller('wheel')
 export class WheelController {
@@ -61,8 +64,13 @@ export class WheelController {
   }
 
   // ---------- SPIN ----------
-  @Post('spin')
-  spin() {
-    return this.wheelService.spin();
+  @UseGuards(JwtAuthGuard)
+  @Post()
+  async spin(@Req() req, @Body('wheel') wheel: number[]) {
+    if (!Array.isArray(wheel) || wheel.length === 0) {
+      throw new Error('Wheel is required');
+    }
+
+    return this.wheelService.spin(req.user.sub, wheel);
   }
 }
