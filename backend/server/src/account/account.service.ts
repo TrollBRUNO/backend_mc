@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import mongoose, { Model } from 'mongoose';
 import { Account, AccountDocument } from './account.schema';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
@@ -210,7 +210,7 @@ export class AccountService {
     }
   }
 
-  async canSpin(accountId: string): Promise<{ canSpin: boolean; nextSpin?: Date }> {
+  /* async canSpin(accountId: string): Promise<{ canSpin: boolean; nextSpin?: Date }> {
     const account = await this.accountModel.findById(accountId);
     if (!account) throw new NotFoundException('Account not found');
 
@@ -236,10 +236,30 @@ export class AccountService {
     } else {
       return { canSpin: false, nextSpin: new Date(lastSpin.getTime() + 24 * 60 * 60 * 1000) };
     }
+  } */
+
+  async canSpin(accountId: string) {
+    const account = await this.accountModel.findById(accountId);
+    if (!account) throw new NotFoundException();
+
+    if (!account.last_spin_date) {
+      return { canSpin: true }; // 👈 первый раз
+    }
+
+    const diff = Date.now() - account.last_spin_date.getTime();
+
+    if (diff >= 24 * 60 * 60 * 1000) {
+      return { canSpin: true };
+    }
+
+    return {
+      canSpin: false,
+      nextSpin: new Date(account.last_spin_date.getTime() + 24 * 60 * 60 * 1000),
+    };
   }
 
   //Получение fake_balance (TakeCredit/CreditTake) раз в 24 часа
-  async canTakeCredit(accountId: string): Promise<{ canTake: boolean; nextTake?: Date }> {
+  /* async canTakeCredit(accountId: string): Promise<{ canTake: boolean; nextTake?: Date }> {
     const account = await this.accountModel.findById(accountId);
     if (!account) throw new NotFoundException('Account not found');
 
@@ -254,22 +274,50 @@ export class AccountService {
     } else {
       return { canTake: false, nextTake: new Date(lastCredit.getTime() + 24 * 60 * 60 * 1000) };
     }
+  } */
+
+  async canTakeCredit(accountId: string) {
+    const account = await this.accountModel.findById(accountId);
+    if (!account) throw new NotFoundException();
+
+    if (!account.last_credit_take_date) {
+      return { canTake: true }; // 👈 ПЕРВЫЙ РАЗ
+    }
+
+    const diff = Date.now() - account.last_credit_take_date.getTime();
+
+    if (diff >= 24 * 60 * 60 * 1000) {
+      return { canTake: true };
+    }
+
+    return {
+      canTake: false,
+      nextTake: new Date(account.last_credit_take_date.getTime() + 24 * 60 * 60 * 1000),
+    };
   }
 
-  //Фактическое начисление fake_balance
-  async takeCredit(accountId: string, amount: number = 1000) {
+  async takeCredit(accountId: string, amount = 1000) {
     const account = await this.accountModel.findById(accountId);
     if (!account) throw new NotFoundException('Account not found');
 
-    const canTake = await this.canTakeCredit(accountId);
-    if (!canTake.canTake) {
-      throw new BadRequestException('Credit not available yet');
+    const now = new Date();
+
+    if (account.last_credit_take_date) {
+      const diff = now.getTime() - account.last_credit_take_date.getTime();
+      if (diff < 24 * 60 * 60 * 1000) {
+        throw new BadRequestException('TOO_EARLY');
+      }
     }
 
-    account.fake_balance = (Number(account.fake_balance?.toString() || 0) + amount) as any;
-    account.last_credit_take_date = new Date(); // обязательно добавить поле в схему
+    const currentBonus = Number(account.fake_balance ?? 0);
+    account.fake_balance = (currentBonus + amount) as any;
+    account.last_credit_take_date = now;
+
     await account.save();
 
-    return { success: true, fake_balance: account.fake_balance };
+    //return account;
+    return {
+      fake_balance: account.fake_balance,
+    }
   }
 }

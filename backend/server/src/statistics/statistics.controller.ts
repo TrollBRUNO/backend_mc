@@ -6,6 +6,8 @@ import {
   Delete,
   Body,
   Param,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -13,6 +15,7 @@ import { diskStorage } from 'multer';
 import { StatisticsService } from './statistics.service';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 @Controller('statistics')
 export class StatisticsController {
@@ -22,6 +25,14 @@ export class StatisticsController {
   @Get()
   findAll() {
     return this.statisticsService.findAll();
+  }
+
+  // ---------- GET STATISTICS FOR ACCOUNT ----------
+  @UseGuards(JwtAuthGuard)
+  @Get('get-profile-stats')
+  getStatistics(@Req() req) {
+    const accountId = req.user.sub;
+    return this.statisticsService.getStatistics(accountId);
   }
 
   // ---------- GET ONE ----------

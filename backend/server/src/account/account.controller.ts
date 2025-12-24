@@ -103,10 +103,24 @@ export class AccountController {
   }
 
   // ---------- CAN SPIN ----------
-  @Get(':id/can-spin')
-  async canSpin(@Param('id') accountId: string) {
-    const result = await this.accountService.canSpin(accountId);
-    return result;
+  @UseGuards(JwtAuthGuard)
+  @Get('can-spin')
+  canSpin(@Req() req) {
+    return this.accountService.canSpin(req.user.sub);
+  }
+
+  // ---------- CAN TAKE CREDIT ----------
+  @UseGuards(JwtAuthGuard)
+  @Get('can-take')
+  canTake(@Req() req) {
+    return this.accountService.canTakeCredit(req.user.sub);
+  }
+
+  // ---------- TAKE CREDIT ----------
+  @UseGuards(JwtAuthGuard)
+  @Post('take-credit')
+  takeCredit(@Req() req, @Body('amount') amount?: number) {
+    return this.accountService.takeCredit(req.user.sub, amount);//amount);
   }
 
   // ---------- GET ALL ----------
@@ -149,8 +163,9 @@ export class AccountController {
       login: account.login,
       realname: account.realname,
       balance: account.balance ?? 0,
-      bonus_balance: account.bonus_balance ?? 0,
-      credit_balance: account.fake_balance ?? 0,
+      bonus_balance: account.bonus_balance.toString() ?? 0,
+      fake_balance: account.fake_balance.toString() ?? 0,
+      last_credit_take_date: account.last_credit_take_date ?? null,
       image_url: account.image_url,
     };
   }

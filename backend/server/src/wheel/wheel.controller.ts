@@ -8,6 +8,7 @@ import {
   Param,
   UseGuards,
   Req,
+  BadRequestException,
 } from '@nestjs/common';
 
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -34,11 +35,13 @@ export class WheelController {
   }
 
   // ---------- CREATE (multipart/form-data для файла) ----------
-  @Post()
-  async create(@Body() body: any) {
-    return this.wheelService.create({
-      value: body.value,
-    });
+  @Post('create')
+  async create(@Body('value') value: number) {
+    if (typeof value !== 'number') {
+      throw new BadRequestException('value must be a number');
+    }
+
+    return this.wheelService.create({ value });
   }
   
   // ---------- CREATE через JSON ----------
@@ -65,10 +68,10 @@ export class WheelController {
 
   // ---------- SPIN ----------
   @UseGuards(JwtAuthGuard)
-  @Post()
+  @Post('spin')
   async spin(@Req() req, @Body('wheel') wheel: number[]) {
     if (!Array.isArray(wheel) || wheel.length === 0) {
-      throw new Error('Wheel is required');
+      throw new BadRequestException('wheel is required');
     }
 
     return this.wheelService.spin(req.user.sub, wheel);

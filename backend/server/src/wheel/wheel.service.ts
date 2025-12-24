@@ -42,7 +42,7 @@ export class WheelService {
     return deleted;
   }   
 
-  async spin(accountId: string, wheel: number[]) {
+  /* async spin(accountId: string, wheel: number[]) {
     const account = await this.accountModel.findById(accountId);
     if (!account) throw new NotFoundException('Account not found');
 
@@ -81,6 +81,41 @@ export class WheelService {
       prize,
       bonus_balance: account.bonus_balance,
       spin_date: now,
+    };
+  } */
+  async spin(accountId: string, wheel: number[]) {
+    const account = await this.accountModel.findById(accountId);
+    if (!account) throw new NotFoundException('Account not found');
+
+    const now = new Date();
+
+    // ⛔ защита от прямого вызова (без проверки)
+    if (account.last_spin_date) {
+      const diff = now.getTime() - account.last_spin_date.getTime();
+      if (diff < 24 * 60 * 60 * 1000) {
+        throw new BadRequestException('SPIN_NOT_AVAILABLE');
+      }
+    }
+
+    const index = Math.floor(Math.random() * wheel.length);
+    const prize = wheel[index];
+
+    const currentBonus = Number(account.bonus_balance ?? 0);
+    account.bonus_balance = (currentBonus + prize) as any;
+    account.last_spin_date = now;
+
+    await account.save();
+
+    await this.statModel.create({
+      user_id: accountId,
+      prize_count: prize,
+      spin_date: now,
+    });
+
+    return {
+      index,
+      prize,
+      bonus_balance: account.bonus_balance,
     };
   }
 }
