@@ -17,7 +17,8 @@ import { AccountService } from './account.service';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { Req, UseGuards } from '@nestjs/common/decorators';
+import { Patch, Req, UseGuards } from '@nestjs/common/decorators';
+import { BindCardDto } from './dto/create-card.dto';
 
 @Controller('account')
 export class AccountController {
@@ -53,17 +54,17 @@ export class AccountController {
   // 3) bindCard — привязка карты
   // ----------------------------------------------------------
   @UseGuards(JwtAuthGuard)
-  @Post(':id/bind-card')
+  @Post('bind-card')
   async bindCard(
-    @Param('id') accountId: string,
-    @Body('card_id') card_id: string,
-    @Body('city') city: string,
+    @Req() req,
+    @Body() dto: BindCardDto,
   ) {
-    if (!card_id || !city)
+    if (!dto.card_id || !dto.city) {
       throw new BadRequestException('card_id and city are required');
+    }
 
-    const result = await this.accountService.bindCard(accountId, card_id, city);
-    return { success: true, card: result };
+    const card = await this.accountService.bindCard(req.user.sub, dto);
+    return { success: true, card };
   }
 
   // ----------------------------------------------------------
@@ -78,7 +79,7 @@ export class AccountController {
   // ----------------------------------------------------------
   // 5) removeCard
   // ----------------------------------------------------------
-  @UseGuards(JwtAuthGuard)
+  /* @UseGuards(JwtAuthGuard)
   @Delete(':id/cards/:cardId')
   async removeCard(
     @Param('id') accountId: string,
@@ -86,8 +87,18 @@ export class AccountController {
   ) {
     const result = await this.accountService.removeCard(accountId, cardId);
     return { success: true, removed: result };
-  }
+  } */
   
+  // ---------- REMOVE PROFILE CARD ----------
+  @UseGuards(JwtAuthGuard)
+  @Patch('cards/:cardId/deactivate')
+  removeProfileCard(
+    @Req() req,
+    @Param('cardId') cardId: string,
+  ) {
+    return this.accountService.removeProfileCard(req.user.sub, cardId);
+  }
+
   // ----------------------------------------------------------
   // 6) checkCard
   // ----------------------------------------------------------
@@ -168,6 +179,14 @@ export class AccountController {
       last_credit_take_date: account.last_credit_take_date ?? null,
       image_url: account.image_url,
     };
+  }
+
+  // ---------- GET CARDS FOR ACCOUNT ----------
+  @UseGuards(JwtAuthGuard)
+  @Get('get-profile-cards')
+  getProfileCards(@Req() req) {
+    const accountId = req.user.sub;
+    return this.accountService.getProfileCards(accountId);
   }
 
   // ---------- CREATE (multipart/form-data для файла) ----------

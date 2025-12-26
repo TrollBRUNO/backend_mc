@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import mongoose, { Model } from 'mongoose';
+import mongoose, { Model, Types } from 'mongoose';
 import { Account, AccountDocument } from './account.schema';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
@@ -160,16 +160,18 @@ export class AccountService {
     };
   }
 
-  async bindCard(accountId: string, card_id: string, city: string) {
-    await this.checkCardAvailability(card_id);
+  async bindCard(
+    accountId: string,
+    dto: { card_id: string; city: string },
+  ) {
+    await this.checkCardAvailability(dto.card_id);
 
     const account = await this.accountModel.findById(accountId);
     if (!account) throw new NotFoundException('Account not found');
 
     const card = {
-      card_id,
-      city,
-      bind_date: new Date(),
+      card_id: dto.card_id,
+      city: dto.city,
       active: true,
     };
 
@@ -319,5 +321,33 @@ export class AccountService {
     return {
       fake_balance: account.fake_balance,
     }
+  }
+
+  async getProfileCards(accountId: string) {
+    const account = await this.accountModel
+      .findById(accountId)
+      .select('cards')
+      .lean();
+
+    if (!account) {
+      throw new NotFoundException('Account not found');
+    }
+
+    return {
+      cards: account.cards.filter(card => card.active),
+    };
+  }
+
+  async removeProfileCard(accountId: string, cardId: string) {
+    const result = await this.accountModel.updateOne(
+      { _id: new Types.ObjectId(accountId), 'cards.card_id': cardId },
+      { $set: { 'cards.$.active': false } }
+    );
+
+    if (result.modifiedCount === 0) {
+      throw new NotFoundException('Active card not found');
+    }
+
+    return { success: true, card_id: cardId };
   }
 }
