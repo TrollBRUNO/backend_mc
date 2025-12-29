@@ -10,6 +10,7 @@ import { SupportModule } from './support/support.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { WheelModule } from './wheel/wheel.module';
 import { AuthModule } from './auth/auth.module';
+import { BonusCodeModule } from './bonus-code/bonus-code.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { AuthModule } from './auth/auth.module';
     StatisticsModule,
     WheelModule,
     AuthModule,
+    BonusCodeModule,
   ],
   controllers: [AppController],
   providers: [AppService],
