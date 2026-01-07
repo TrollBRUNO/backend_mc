@@ -11,10 +11,15 @@ import { StatisticsModule } from './statistics/statistics.module';
 import { WheelModule } from './wheel/wheel.module';
 import { AuthModule } from './auth/auth.module';
 import { BonusCodeModule } from './bonus-code/bonus-code.module';
+import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
-    MongooseModule.forRoot('mongodb://localhost:27017/mydb'),
+    //MongooseModule.forRoot('mongodb://localhost:27017/mydb'),
+    MongooseModule.forRoot('mongodb://mongo:27017/dbname'),
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
     NewsModule,
     GalleryModule,
     CasinoModule,

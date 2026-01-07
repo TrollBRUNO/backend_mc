@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:6
+    container_name: magicity-mongo
+    restart: always
+#    ports:
+#      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - magicity-net
+
+  backend:
+    build: .
+    container_name: magicity-backend
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mongo
+    networks:
+      - magicity-net
+#    environment:
+#      MONGO_URI: mongodb://mongo:27017/dbname
+
+  nginx:
+    image: nginx:latest
+    container_name: magicity-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+    depends_on:
+      - backend
+    networks:
+      - magicity-net
+
+networks:
+  magicity-net:
+    driver: bridge
+
+volumes:
+  mongo_data:
+
+
+# services:
+#  backend:
+#    build: .
+#    container_name: magicity-backend
+#    restart: always
+#    env_file:
+#      - .env
+#    expose:
+#      - "3000"
+#
+#  nginx:
+#    image: nginx:latest
+#    container_name: magicity-nginx
+#    restart: always
+#    ports:
+#      - "80:80"
+#    depends_on:
+#      - backend
+#    volumes:
+#      - ./nginx:/etc/nginx/conf.d 

@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BonusCodeService } from './bonus-code.service';
+import { ApiKeyGuard } from '../auth/guards/api-key.guard';
 
 @Controller('bonus-code')
 export class BonusCodeController {
@@ -25,6 +26,7 @@ export class BonusCodeController {
   // --------------------------------------------------
   // 2) Проверка бонус-кода (кассир)
   // --------------------------------------------------
+  @UseGuards(ApiKeyGuard)
   @Post('verify')
   async verify(
     @Body('card_id') cardId: string,
