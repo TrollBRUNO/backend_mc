@@ -18,7 +18,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          source: "backend/server/**"
+          source: "backend/server/{*,.*}"
           strip_components: 2
           target: "/home/linuxuser/backend_mc/backend/server"
 
