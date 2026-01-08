@@ -63,7 +63,6 @@ export class AccountService {
       city: string;
       active: boolean;
     }[];
-    role: string;
   }) {
     // 1️⃣ username уникален
     const loginExists = await this.accountModel.findOne({
@@ -87,7 +86,6 @@ export class AccountService {
       password: hash,
       realname: dto.realname,
       cards: dto.cards ?? [],
-      role: dto.role,
     });
 
     await account.save();

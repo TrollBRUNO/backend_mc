@@ -150,7 +150,7 @@ export class AccountController {
   // ---------- REGISTER ----------
   @Post('register')
   async register(@Body() dto: any) {
-    const { login, password, realname, cards, role } = dto;
+    const { login, password, realname, cards } = dto;
 
     if (!login || !password || !realname) {
       throw new BadRequestException('MISSING_FIELDS');
@@ -160,8 +160,7 @@ export class AccountController {
       login,
       password,
       realname,
-      cards,
-      role
+      cards
     });
   }
 
