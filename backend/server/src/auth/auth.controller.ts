@@ -45,6 +45,9 @@ export class AuthController {
   async verifyAdmin(@Body('code') code: string) {
     const adminCode = this.configService.get<string>('ADMIN_SECRET_CODE');
 
+    console.log('Expected:', code); 
+    console.log('Actual:', this.configService.get<string>('ADMIN_SECRET_CODE'));
+
     if (code === adminCode) {
       return { ok: true };
     }
