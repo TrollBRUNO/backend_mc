@@ -18,7 +18,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
-          source: "."
+          source: "backend/server/**"
           target: "/home/linuxuser/backend_mc/backend/server"
 
       - name: Restart Docker containers
