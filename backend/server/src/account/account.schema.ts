@@ -23,6 +23,9 @@ export class Account {
   @Prop()
   realname: string;
 
+  @Prop({ type: String, default: 'user' }) 
+  role: string;
+
   @Prop({ type: String, default: null, sparse: true})
   google_id: string | null;
 

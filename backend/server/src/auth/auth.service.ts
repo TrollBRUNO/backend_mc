@@ -39,7 +39,7 @@ export class AuthService {
 
     const payload = {
       sub: account._id.toString(),
-      role: 'user',
+      role: account.role ?? 'user',
       token_version: account.token_version ?? 0,
     };
 

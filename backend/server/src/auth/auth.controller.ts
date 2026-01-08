@@ -8,10 +8,11 @@ import {
 
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { ConfigService } from '@nestjs/config';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService, private readonly configService: ConfigService) {}
 
   @Post('login')
   login(@Body() dto: LoginDto, @Req() req) {
@@ -38,5 +39,16 @@ export class AuthController {
     }
 
     return this.authService.logout(token);
+  }
+
+  @Post('admin-verify')
+  async verifyAdmin(@Body('code') code: string) {
+    const adminCode = this.configService.get<string>('ADMIN_SECRET_CODE');
+
+    if (code === adminCode) {
+      return { ok: true };
+    }
+
+    return { ok: false };
   }
 }

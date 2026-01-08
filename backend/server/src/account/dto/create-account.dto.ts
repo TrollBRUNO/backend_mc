@@ -23,4 +23,6 @@ export class CreateAccountDto {
   readonly last_spin_date?: Date;
 
   readonly image_url?: string;
+
+  readonly role?: string;
 }
