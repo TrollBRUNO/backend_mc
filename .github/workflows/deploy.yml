@@ -19,7 +19,6 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
           source: "backend/server/{*,.*}"
-          strip_components: 2
           target: "/home/linuxuser/backend_mc/backend/server"
 
       - name: Restart Docker containers
