@@ -16,6 +16,7 @@ import { StatisticsService } from './statistics.service';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { AdminGuard } from 'src/auth/guards/admin.guard';
 
 @Controller('statistics')
 export class StatisticsController {
@@ -36,12 +37,14 @@ export class StatisticsController {
   }
 
   // ---------- GET ONE ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.statisticsService.findOne(id);
   }
 
   // ---------- CREATE (multipart/form-data для файла) ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Post()
   async create(@Body() body: any) {
     return this.statisticsService.create({
@@ -52,6 +55,7 @@ export class StatisticsController {
   }
   
   // ---------- CREATE через JSON ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Post('json')
   async createJson(@Body() body: any) {
     return this.statisticsService.create({
@@ -62,6 +66,7 @@ export class StatisticsController {
   }
 
   // ---------- UPDATE ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Put(':id')
   async update(@Param('id') id: string, @Body() body: any) {
     return this.statisticsService.update(id, {
@@ -70,6 +75,7 @@ export class StatisticsController {
   }
 
   // ---------- DELETE ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Delete(':id')
   delete(@Param('id') id: string) {
     return this.statisticsService.delete(id);

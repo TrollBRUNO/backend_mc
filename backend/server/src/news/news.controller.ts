@@ -8,6 +8,7 @@ import {
   Param,
   UseInterceptors,
   UploadedFile,
+  UseGuards,
 } from '@nestjs/common';
 
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -15,6 +16,8 @@ import { diskStorage } from 'multer';
 import { NewsService } from './news.service';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
+import { AdminGuard } from '../auth/guards/admin.guard';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 @Controller('news')
 export class NewsController {
@@ -27,12 +30,14 @@ export class NewsController {
   }
 
   // ---------- GET ONE ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.newsService.findOne(id);
   }
 
   // ---------- CREATE (multipart/form-data для файла) ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Post()
   @UseInterceptors(
     FileInterceptor('image', {
@@ -60,6 +65,7 @@ export class NewsController {
   }
 
   // ---------- CREATE через JSON (уже загруженные файлы) ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Post('json')
   async createJson(@Body() body: any) {
     const imageUrl = body.image_url ? `/uploads/${body.image_url}` : `/uploads/logo_magic_city5.png`;
@@ -67,6 +73,7 @@ export class NewsController {
   }
 
   // ---------- UPDATE ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Put(':id')
   @UseInterceptors(
     FileInterceptor('image', {
@@ -97,6 +104,7 @@ export class NewsController {
   }
 
   // ---------- DELETE ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Delete(':id')
   delete(@Param('id') id: string) {
     return this.newsService.delete(id);

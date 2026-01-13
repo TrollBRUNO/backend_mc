@@ -8,6 +8,7 @@ import {
   Param,
   UseInterceptors,
   UploadedFile,
+  UseGuards,
 } from '@nestjs/common';
 
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -15,6 +16,8 @@ import { diskStorage } from 'multer';
 import { CasinoService } from './casino.service';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
+import { AdminGuard } from 'src/auth/guards/admin.guard';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 @Controller('casino')
 export class CasinoController {
@@ -33,12 +36,14 @@ export class CasinoController {
   }
 
   // ---------- GET ONE ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.casinoService.findOne(id);
   }
 
   // ---------- CREATE (multipart/form-data для файла) ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Post()
   @UseInterceptors(
     FileInterceptor('image', {
@@ -97,6 +102,7 @@ export class CasinoController {
   }
 
   // ---------- CREATE через JSON (уже загруженные файлы) ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Post('json')
   async createJson(@Body() body: any) {
     const imageUrl = body.image_url ? `/uploads/${body.image_url}` : `/uploads/logo_magic_city5.png`;
@@ -104,6 +110,7 @@ export class CasinoController {
   }
 
   // ---------- UPDATE ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Put(':id')
   @UseInterceptors(
     FileInterceptor('image', {
@@ -134,6 +141,7 @@ export class CasinoController {
   }
 
   // ---------- DELETE ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Delete(':id')
   delete(@Param('id') id: string) {
     return this.casinoService.delete(id);

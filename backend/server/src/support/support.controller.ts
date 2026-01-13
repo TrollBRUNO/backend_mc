@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  UseGuards,
 } from '@nestjs/common';
 
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -13,6 +14,8 @@ import { diskStorage } from 'multer';
 import { SupportService } from './support.service';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
+import { AdminGuard } from 'src/auth/guards/admin.guard';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 
 @Controller('support')
 export class SupportController {
@@ -25,12 +28,14 @@ export class SupportController {
   }
 
   // ---------- GET ONE ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.supportService.findOne(id);
   }
 
   // ---------- CREATE (multipart/form-data для файла) ----------
+  @UseGuards(JwtAuthGuard)
   @Post()
   async create(@Body() body: any) {
     return this.supportService.create({
@@ -41,6 +46,7 @@ export class SupportController {
   }
   
   // ---------- CREATE через JSON ----------
+  @UseGuards(JwtAuthGuard)
   @Post('json')
   async createJson(@Body() body: any) {
     return this.supportService.create({
@@ -51,6 +57,7 @@ export class SupportController {
   }
 
   // ---------- UPDATE ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Put(':id')
   async update(@Param('id') id: string, @Body() body: any) {
     return this.supportService.update(id, {
@@ -59,6 +66,7 @@ export class SupportController {
   }
 
   // ---------- DELETE ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Delete(':id')
   delete(@Param('id') id: string) {
     return this.supportService.delete(id);

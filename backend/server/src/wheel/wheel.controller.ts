@@ -17,6 +17,7 @@ import { WheelService } from './wheel.service';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { AdminGuard } from 'src/auth/guards/admin.guard';
 
 @Controller('wheel')
 export class WheelController {
@@ -29,12 +30,14 @@ export class WheelController {
   }
 
   // ---------- GET ONE ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.wheelService.findOne(id);
   }
 
   // ---------- CREATE (multipart/form-data для файла) ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Post('create')
   async create(@Body('value') value: number) {
     if (typeof value !== 'number') {
@@ -45,6 +48,7 @@ export class WheelController {
   }
   
   // ---------- CREATE через JSON ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Post('json')
   async createJson(@Body() body: any) {
     return this.wheelService.create({
@@ -53,6 +57,7 @@ export class WheelController {
   }
 
   // ---------- UPDATE ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Put(':id')
   async update(@Param('id') id: string, @Body() body: any) {
     return this.wheelService.update(id, {
@@ -61,6 +66,7 @@ export class WheelController {
   }
 
   // ---------- DELETE ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Delete(':id')
   delete(@Param('id') id: string) {
     return this.wheelService.delete(id);
