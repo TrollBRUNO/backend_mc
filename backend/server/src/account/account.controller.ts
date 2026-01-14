@@ -19,6 +19,7 @@ import { v4 as uuid } from 'uuid';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Patch, Req, UseGuards } from '@nestjs/common/decorators';
 import { BindCardDto } from './dto/create-card.dto';
+import { AdminGuard } from 'src/auth/guards/admin.guard';
 
 @Controller('account')
 export class AccountController {
@@ -135,6 +136,7 @@ export class AccountController {
   }
 
   // ---------- GET ALL ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Get()
   findAll() {
     return this.accountService.findAll();
@@ -232,6 +234,7 @@ export class AccountController {
   }
 
   // ---------- UPDATE ----------
+  @UseGuards(JwtAuthGuard)
   @Put(':id')
   @UseInterceptors(
     FileInterceptor('image', {
@@ -265,5 +268,46 @@ export class AccountController {
   @Delete(':id')
   delete(@Param('id') id: string) {
     return this.accountService.delete(id);
+  }
+
+  // ----------------------------------------------------------
+  //  FULL ACCOUNT STATS (ADMIN ONLY)
+  // ----------------------------------------------------------
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Get('full/all')
+  async getAllFullStats() {
+    return this.accountService.getAllFullStats();
+  }
+
+  // ---------- RESET PASSWORD (ADMIN ONLY) ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Post(':id/reset-password')
+  async resetPassword(@Param('id') id: string) {
+    return this.accountService.generateTemporaryPassword(id);
+  }
+
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Get('search/:query')
+  async search(@Param('query') query: string) {
+    return this.accountService.search(query);
+  }
+
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Get('sort/:field/:direction')
+  async sort(
+    @Param('field') field: string,
+    @Param('direction') direction: 'asc' | 'desc'
+  ) {
+    return this.accountService.sort(field, direction);
+  }
+
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Put(':id/cards/:cardId')
+  async updateCard(
+    @Param('id') accountId: string,
+    @Param('cardId') cardId: string,
+    @Body() dto: any
+  ) {
+    return this.accountService.updateCard(accountId, cardId, dto);
   }
 }

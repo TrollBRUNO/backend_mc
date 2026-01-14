@@ -352,4 +352,93 @@ export class AccountService {
 
     return { success: true, card_id: cardId };
   }
+
+  async getAllFullStats() {
+    const accounts = await this.accountModel.find().lean();
+
+    return accounts.map(acc => ({
+      id: acc._id.toString(),
+      login: acc.login,
+      realname: acc.realname,
+
+      balance: acc.balance?.toString() ?? "0",
+      bonus_balance: acc.bonus_balance?.toString() ?? "0",
+      fake_balance: acc.fake_balance?.toString() ?? "0",
+
+      last_spin_date: acc.last_spin_date,
+      last_credit_take_date: acc.last_credit_take_date,
+
+      role: acc.role,
+      google_id: acc.google_id,
+      apple_id: acc.apple_id,
+
+      cards: acc.cards,
+
+      bonus_code: acc.bonus_code,
+      bonus_code_expire: acc.bonus_code_expire,
+
+      image_url: acc.image_url,
+
+      is_blocked: acc.is_blocked,
+      block_reason: acc.block_reason,
+
+      token_version: acc.token_version,
+    }));
+  }
+
+  async generateTemporaryPassword(accountId: string) {
+    const account = await this.accountModel.findById(accountId);
+    if (!account) throw new NotFoundException('Account not found');
+
+      // Генерируем временный пароль
+      const tempPassword = 'TEMP-' + Math.floor(100000 + Math.random() * 900000);
+
+      // Хэшируем
+      const hash = await bcrypt.hash(tempPassword, 10);
+
+      // Обновляем пароль
+      account.password = hash;
+      account.token_version += 1; // инвалидируем старые токены
+      await account.save();
+
+      return {
+        success: true,
+        temp_password: tempPassword,
+      };
+    }
+
+    async search(query: string) {
+    const regex = new RegExp(query, 'i');
+
+    return this.accountModel.find({
+      $or: [
+        { login: regex },
+        { realname: regex },
+        { 'cards.card_id': regex },
+        { 'cards.city': regex },
+      ]
+    }).lean();
+  }
+
+  async sort(field: string, direction: 'asc' | 'desc') {
+    const sortObj: any = {};
+    sortObj[field] = direction === 'asc' ? 1 : -1;
+
+    return this.accountModel.find().sort(sortObj).lean();
+  }
+
+  async updateCard(accountId: string, cardId: string, dto: { card_id?: string; city?: string; active?: boolean }) {
+    const account = await this.accountModel.findById(accountId);
+    if (!account) throw new NotFoundException('Account not found');
+
+    const card = account.cards.find(c => c.card_id === cardId);
+    if (!card) throw new NotFoundException('Card not found');
+
+    if (dto.card_id) card.card_id = dto.card_id;
+    if (dto.city) card.city = dto.city;
+    if (dto.active !== undefined) card.active = dto.active;
+
+    await account.save();
+    return card;
+  }
 }
