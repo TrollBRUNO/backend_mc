@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -37,21 +38,21 @@ export class SupportController {
   // ---------- CREATE (multipart/form-data для файла) ----------
   @UseGuards(JwtAuthGuard)
   @Post()
-  async create(@Body() body: any) {
+  async create(@Req() req, @Body() body: any) {
     return this.supportService.create({
       description_problem: body.description_problem,
-      user_id: body.user_id,
-      status: body.status,
+      user_id: req.user.id, // <-- из токена
+      status: body.status ?? 'open',
     });
   }
   
   // ---------- CREATE через JSON ----------
   @UseGuards(JwtAuthGuard)
   @Post('json')
-  async createJson(@Body() body: any) {
+  async createJson(@Req() req, @Body() body: any) {
     return this.supportService.create({
       description_problem: body.description_problem,
-      user_id: body.user_id,
+      user_id: req.user.id, // <-- из токена
       status: body.status ?? 'open',
     });
   }
