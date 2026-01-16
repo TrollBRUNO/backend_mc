@@ -12,6 +12,8 @@ import { WheelModule } from './wheel/wheel.module';
 import { AuthModule } from './auth/auth.module';
 import { BonusCodeModule } from './bonus-code/bonus-code.module';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
+import { TasksService } from './tasks/tasks.service';
 
 @Module({
   imports: [
@@ -29,8 +31,9 @@ import { ConfigModule } from '@nestjs/config';
     WheelModule,
     AuthModule,
     BonusCodeModule,
+    ScheduleModule.forRoot()
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, TasksService],
 })
 export class AppModule {}
