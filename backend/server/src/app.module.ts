@@ -13,8 +13,6 @@ import { AuthModule } from './auth/auth.module';
 import { BonusCodeModule } from './bonus-code/bonus-code.module';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
-import { TasksService } from './tasks/tasks.service';
-import { PushService } from './push/push.service';
 import { PushModule } from './push/push.module';
 import { TasksModule } from './tasks/tasks.module';
 
@@ -39,6 +37,6 @@ import { TasksModule } from './tasks/tasks.module';
     TasksModule
   ],
   controllers: [AppController],
-  providers: [AppService, TasksService, PushService],
+  providers: [AppService],
 })
 export class AppModule {}
