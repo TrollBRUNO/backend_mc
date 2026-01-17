@@ -441,4 +441,22 @@ export class AccountService {
     await account.save();
     return card;
   }
+
+  async updateNotificationSettings(accountId: string, settings: any) {
+    return this.accountModel.findByIdAndUpdate(accountId, {
+      notification_settings: settings,
+    }, { new: true });
+  }
+
+  async getNotificationSettings(accountId: string) {
+    const acc = await this.accountModel.findById(accountId).lean();
+
+    if (!acc) throw new NotFoundException('Account not found');
+
+    return acc.notification_settings;
+  }
+
+  async updateFcmToken(id: string, token: string) {
+    return this.accountModel.findByIdAndUpdate(id, { fcm_token: token });
+  }
 }

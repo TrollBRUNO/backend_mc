@@ -4,11 +4,15 @@ import { Model } from 'mongoose';
 import { News, NewsDocument } from './news.schema';
 import { CreateNewsDto } from './dto/create-news.dto';
 import { UpdateNewsDto } from './dto/update-news.dto';
+import { Account, AccountDocument } from 'src/account/account.schema';
+import { PushService } from 'src/push/push.service';
 
 @Injectable()
 export class NewsService {
   constructor(
     @InjectModel(News.name) private newsModel: Model<NewsDocument>,
+    @InjectModel(Account.name) private accountModel: Model<AccountDocument>,
+    private readonly pushService: PushService,
   ) {}
 
   async findAll(): Promise<News[]> {
@@ -23,6 +27,15 @@ export class NewsService {
 
   async create(dto: CreateNewsDto): Promise<News> {
     const news = new this.newsModel(dto);
+
+    const users = await this.accountModel.find({ 'notification_settings.news_post': true, }); 
+    for (const u of users) { 
+      await this.pushService.send(u.fcm_token, {
+        title: 'Новая новость!', 
+        body: 'В галерее появился новый пост.', 
+      }).catch(() => {});
+    }
+
     return news.save();
   } 
 

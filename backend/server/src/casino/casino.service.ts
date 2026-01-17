@@ -41,4 +41,32 @@ export class CasinoService {
     if (!deleted) throw new NotFoundException(`Casino ${id} not found`);
     return deleted;
   }   
+
+  // Получить текущие значения джекпотов с внешнего сервера
+  async getJackpotValues(id: string) {
+    const casino = await this.findOne(id);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      const response = await fetch(casino.jackpot_url, {
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        throw new Error(`Jackpot server responded with ${response.status}`);
+      }
+
+      return await response.json(); // { mini: 123, middle: 456, mega: 789 }
+    } catch (error) {
+      return {
+        error: true,
+        message: 'Failed to load jackpot data',
+        details: error.message,
+      };
+    }
+  }
 }

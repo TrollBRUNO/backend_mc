@@ -76,29 +76,29 @@ export class CasinoController {
     // ---------- Брать джекпот по URL ----------
   @Get(':id/jackpots')
   async getJackpots(@Param('id') id: string) {
-  const casino = await this.casinoService.findOne(id);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
+    const casino = await this.casinoService.findOne(id);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
 
-  try {
-      const response = await fetch(casino.jackpot_url, {
-        signal: controller.signal,
-      });
+    try {
+        const response = await fetch(casino.jackpot_url, {
+          signal: controller.signal,
+        });
 
-    clearTimeout(timeout);
+      clearTimeout(timeout);
 
-    if (!response.ok) {
-      throw new Error(`Jackpot server responded with ${response.status}`);
-    } 
+      if (!response.ok) {
+        throw new Error(`Jackpot server responded with ${response.status}`);
+      } 
 
-    return await response.json();
-  } catch (error) {
-      return {
-        error: true,
-        message: 'Failed to load jackpot data',
-        details: error.message,
-      };
-    }
+      return await response.json();
+    } catch (error) {
+        return {
+          error: true,
+          message: 'Failed to load jackpot data',
+          details: error.message,
+        };
+      }
   }
 
   // ---------- CREATE через JSON (уже загруженные файлы) ----------

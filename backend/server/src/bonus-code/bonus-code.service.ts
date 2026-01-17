@@ -82,7 +82,7 @@ export class BonusCodeService {
 
 
     async verifyBonusCode(card_id: string, code: string) {
-        // 1. Найти код
+        //Найти код
         const bonus = await this.bonusCodeModel.findOne({
             code,
             used: false,
@@ -93,11 +93,11 @@ export class BonusCodeService {
             throw new BadRequestException('INVALID_OR_EXPIRED_CODE');
         }
 
-        // 2. Найти аккаунт
+        //Найти аккаунт
         const account = await this.accountModel.findById(bonus.account_id);
         if (!account) throw new BadRequestException('ACCOUNT_NOT_FOUND');
 
-        // 3. Проверить карту
+        //Проверить карту
         const card = account.cards.find(
             c => c.card_id === card_id && c.active
         );
@@ -106,7 +106,7 @@ export class BonusCodeService {
             throw new BadRequestException('CARD_NOT_LINKED');
         }
 
-        // 4. Списать бонусы
+        //Списать бонусы
         const amount = Number(account.bonus_balance ?? 0);
         if (amount <= 0) {
             throw new BadRequestException('NO_BONUS_BALANCE');
@@ -115,7 +115,7 @@ export class BonusCodeService {
         account.bonus_balance = 0 as any;
         await account.save();
 
-        // 5. Пометить код использованным
+        //Пометить код использованным
         bonus.used = true;
         await bonus.save();
 

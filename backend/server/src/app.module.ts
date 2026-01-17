@@ -14,6 +14,7 @@ import { BonusCodeModule } from './bonus-code/bonus-code.module';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TasksService } from './tasks/tasks.service';
+import { PushService } from './push/push.service';
 
 @Module({
   imports: [
@@ -34,6 +35,6 @@ import { TasksService } from './tasks/tasks.service';
     ScheduleModule.forRoot()
   ],
   controllers: [AppController],
-  providers: [AppService, TasksService],
+  providers: [AppService, TasksService, PushService],
 })
 export class AppModule {}

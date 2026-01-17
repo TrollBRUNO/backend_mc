@@ -20,10 +20,14 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Patch, Req, UseGuards } from '@nestjs/common/decorators';
 import { BindCardDto } from './dto/create-card.dto';
 import { AdminGuard } from 'src/auth/guards/admin.guard';
+import { PushService } from 'src/push/push.service';
 
 @Controller('account')
 export class AccountController {
-  constructor(private readonly accountService: AccountService) {}
+  constructor(
+      private readonly accountService: AccountService, 
+      private readonly pushService: PushService,
+    ) {}
 
   // ----------------------------------------------------------
   // 1) generateBonusCode
@@ -309,5 +313,37 @@ export class AccountController {
     @Body() dto: any
   ) {
     return this.accountService.updateCard(accountId, cardId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Put('notifications')
+  async updateNotifications(@Req() req, @Body() body: any) {
+    return this.accountService.updateNotificationSettings(req.user.sub, body);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('notifications')
+  async getNotifications(@Req() req) {
+    return this.accountService.getNotificationSettings(req.user.sub);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('push-test')
+  async pushTest(@Req() req) {
+    const acc = await this.accountService.findOne(req.user.sub);
+
+    await this.pushService.send(acc.fcm_token, {
+      title: 'Тестовое уведомление',
+      body: 'Пуш работает!',
+    });
+
+    return { ok: true };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('fcm-token')
+  async saveFcmToken(@Req() req, @Body('token') token: string) {
+    await this.accountService.updateFcmToken(req.user.sub, token);
+    return { ok: true };
   }
 }

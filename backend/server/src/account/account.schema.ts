@@ -32,6 +32,9 @@ export class Account {
   @Prop({ type: String, default: null, sparse: true})
   apple_id: string | null;
 
+  @Prop({ type: String, default: null })
+  fcm_token: string;
+
   @Prop({
     type: [
       {
@@ -47,6 +50,32 @@ export class Account {
     city: string;
     active: boolean;
   }[];
+
+  @Prop({
+    type: {
+      wheel_ready: { type: Boolean, default: true },
+      bonus_reminder: { type: Boolean, default: true },
+      news_post: { type: Boolean, default: true },
+      jackpot_win_post: { type: Boolean, default: true },
+      jackpot_thresholds: {
+        mini: { type: Number, default: 100 },
+        middle: { type: Number, default: 500 },
+        mega: { type: Number, default: 3000 },
+      },
+    },
+    default: {},
+  })
+  notification_settings: {
+    wheel_ready: boolean;
+    bonus_reminder: boolean;
+    news_post: boolean;
+    jackpot_win_post: boolean;
+    jackpot_thresholds: {
+      mini: number;
+      middle: number;
+      mega: number;
+    };
+  };
 
   @Prop({ type: String, default: null })
   bonus_code: string | null;
