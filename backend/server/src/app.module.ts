@@ -19,7 +19,8 @@ import { TasksModule } from './tasks/tasks.module';
 @Module({
   imports: [
     //MongooseModule.forRoot('mongodb://localhost:27017/mydb'),
-    MongooseModule.forRoot('mongodb://mongo:27017/dbname'),
+    //MongooseModule.forRoot('mongodb://mongo:27017/dbname'),
+    MongooseModule.forRoot('mongodb://127.0.0.1:27017/dbname'),
     ConfigModule.forRoot({
       isGlobal: true,
     }),
