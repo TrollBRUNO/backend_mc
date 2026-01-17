@@ -10,6 +10,6 @@ import { CasinoController } from './casino.controller';
   ],
   providers: [CasinoService],
   controllers: [CasinoController],
-  exports: [CasinoService],
+  exports: [CasinoService, MongooseModule],
 })
 export class CasinoModule {}
