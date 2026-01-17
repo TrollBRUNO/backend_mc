@@ -15,6 +15,8 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TasksService } from './tasks/tasks.service';
 import { PushService } from './push/push.service';
+import { PushModule } from './push/push.module';
+import { TasksModule } from './tasks/tasks.module';
 
 @Module({
   imports: [
@@ -32,7 +34,9 @@ import { PushService } from './push/push.service';
     WheelModule,
     AuthModule,
     BonusCodeModule,
-    ScheduleModule.forRoot()
+    ScheduleModule.forRoot(),
+    PushModule,
+    TasksModule
   ],
   controllers: [AppController],
   providers: [AppService, TasksService, PushService],

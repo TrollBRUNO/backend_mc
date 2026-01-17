@@ -9,6 +9,7 @@ import { CasinoController } from './casino.controller';
     MongooseModule.forFeature([{ name: Casino.name, schema: CasinoSchema }])
   ],
   providers: [CasinoService],
-  controllers: [CasinoController]
+  controllers: [CasinoController],
+  exports: [CasinoService],
 })
 export class CasinoModule {}
