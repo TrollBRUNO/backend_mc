@@ -3,10 +3,12 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { Account, AccountSchema } from './account.schema';
 import { AccountService } from './account.service';
 import { AccountController } from './account.controller';
+import { PushModule } from 'src/push/push.module';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Account.name, schema: AccountSchema }])
+    MongooseModule.forFeature([{ name: Account.name, schema: AccountSchema }]),
+    PushModule,
   ],
   providers: [AccountService],
   controllers: [AccountController],
