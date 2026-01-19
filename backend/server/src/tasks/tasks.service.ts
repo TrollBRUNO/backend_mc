@@ -44,16 +44,20 @@ export class TasksService {
       last_spin_date: { $ne: null },
     });
 
-    for (const acc of accounts) {
-      const nextSpin = new Date(acc.last_spin_date.getTime() + 24 * 60 * 60 * 1000);
+    await Promise.all(
+      accounts.map(acc => {
+        const nextSpin = new Date(acc.last_spin_date.getTime() + 24 * 60 * 60 * 1000);
 
-      if (nextSpin <= now) {
-        await this.pushService.send(acc.fcm_token, {
-          title: 'Колесо готово!',
-          body: 'Вы можете снова крутить колесо удачи.',
-        });
-      }
-    }
+        if (nextSpin <= now) {
+          return this.pushService.send(acc.fcm_token, {
+            title: 'Колесо готово!',
+            body: 'Вы можете снова крутить колесо удачи.',
+          }).catch(() => {});
+        }
+
+        return null;
+      }),
+    );
   }
 
   // каждую минуту
@@ -66,17 +70,21 @@ export class TasksService {
       'notification_settings.bonus_reminder': true,
     });
 
-    for (const acc of accounts) {
-      const expire = new Date(acc.last_spin_date.getTime() + 24 * 60 * 60 * 1000);
-      const diff = expire.getTime() - now.getTime();
+    await Promise.all(
+      accounts.map(a => {
+        const expire = new Date(a.last_spin_date.getTime() + 24 * 60 * 60 * 1000);
+        const diff = expire.getTime() - now.getTime();
 
-      if (diff < 60 * 60 * 1000 && diff > 0) {
-        await this.pushService.send(acc.fcm_token, {
-          title: 'Бонус скоро сгорит!',
-          body: 'У вас остался 1 час, чтобы забрать бонус.',
-        });
-      }
-    }
+        if (diff < 60 * 60 * 1000 && diff > 0) {
+          this.pushService.send(a.fcm_token, {
+            title: 'Бонус скоро сгорит!',
+            body: 'У вас остался 1 час, чтобы забрать бонус.',
+          }).catch(() => {});
+        }
+
+        return null;
+      })
+    );
   }
 
   // каждую минуту
@@ -93,41 +101,56 @@ export class TasksService {
       'notification_settings.jackpot_thresholds': { $exists: true },
     });
 
-    for (const u of users) {
-      const t = u.notification_settings.jackpot_thresholds;
+   await Promise.all(
+      users.map(u => {
+        const t = u.notification_settings.jackpot_thresholds;
+        const tasks: Promise<void>[] = [];
 
-      if (jackpot.mini > t.mini) {
-        await this.pushService.send(u.fcm_token, {
-          title: 'Mini Jackpot растёт!',
-          body: `Сейчас: ${jackpot.mini} EUR`,
-        });
-      }
+        if (jackpot.mini > t.mini) {
+          tasks.push(
+            this.pushService.send(u.fcm_token, {
+              title: 'Mini Jackpot растёт!',
+              body: `Сейчас: ${jackpot.mini} EUR`,
+            }).catch(() => {}),
+          );
+        }
 
-      if (jackpot.middle > t.middle) {
-        await this.pushService.send(u.fcm_token, {
-          title: 'Middle Jackpot растёт!',
-          body: `Сейчас: ${jackpot.middle} EUR`,
-        });
-      }
+        if (jackpot.middle > t.middle) {
+          tasks.push(
+            this.pushService.send(u.fcm_token, {
+              title: 'Middle Jackpot растёт!',
+              body: `Сейчас: ${jackpot.middle} EUR`,
+            }).catch(() => {}),
+          );
+        }
 
-      if (jackpot.mega > t.mega) {
-        await this.pushService.send(u.fcm_token, {
-          title: 'Mega Jackpot растёт!',
-          body: `Сейчас: ${jackpot.mega} EUR`,
-        });
-      }
-    }
+        if (jackpot.mega > t.mega) {
+          tasks.push(
+            this.pushService.send(u.fcm_token, {
+              title: 'Mega Jackpot растёт!',
+              body: `Сейчас: ${jackpot.mega} EUR`,
+            }).catch(() => {}),
+          );
+        }
+
+        return tasks.length > 0 ? Promise.all(tasks) : Promise.resolve();
+      }),
+    );
   }
+
 
   // Ежедневно в 21:00
   @Cron('0 21 * * *')
   async nightlyReminder() {
     const users = await this.accountModel.find().select('_id fcm_token');
-    for (const user of users) {
-      await this.pushService.send(user.fcm_token, {
-        title: 'Не забывайте!',
-        body: 'Загляните в казино — вас ждёт удача!',
-      });
-    }
+
+    await Promise.all(
+      users.map(u =>
+        this.pushService.send(u.fcm_token, {
+          title: 'Не забывайте!',
+          body: 'Загляните в казино — вас ждёт удача!',
+        }).catch(() => {}),
+      ),
+    );
   }
 }

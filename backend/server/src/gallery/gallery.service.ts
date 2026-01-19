@@ -29,12 +29,15 @@ export class GalleryService {
     const gallery = new this.galleryModel(dto);
 
     const users = await this.accountModel.find({ 'notification_settings.jackpot_win_post': true, }); 
-    for (const u of users) { 
-      await this.pushService.send(u.fcm_token, {
-        title: 'Новый выигрыш!', 
-        body: 'В галерее появился новый выигрыш.', 
-      }).catch(() => {}); 
-    }
+
+    await Promise.all(
+      users.map(u =>
+        this.pushService.send(u.fcm_token, {
+          title: 'Новый выигрыш!',
+          body: 'В галерее появился новый выигрыш.',
+        }).catch(() => {}),
+      ),
+    );
 
     return gallery.save();
   } 

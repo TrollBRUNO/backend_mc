@@ -29,12 +29,15 @@ export class NewsService {
     const news = new this.newsModel(dto);
 
     const users = await this.accountModel.find({ 'notification_settings.news_post': true, }); 
-    for (const u of users) { 
-      await this.pushService.send(u.fcm_token, {
-        title: 'Новая новость!', 
-        body: 'В галерее появился новый пост.', 
-      }).catch(() => {});
-    }
+
+    await Promise.all(
+      users.map(u =>
+        this.pushService.send(u.fcm_token, {
+          title: 'Новая новость!',
+          body: 'В галерее появился новый пост.',
+        }).catch(() => {}),
+      ),
+    );
 
     return news.save();
   } 
