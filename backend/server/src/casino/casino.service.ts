@@ -11,10 +11,26 @@ export class CasinoService {
     @InjectModel(Casino.name) private casinoModel: Model<CasinoDocument>,
   ) {}
 
-  async getCities(): Promise<string[]> {
+  /* async getCities(): Promise<Record<string, string>> {
     return this.casinoModel.distinct('city');
-  }
+  } */
   
+  async getCities(): Promise<Record<string, string>[]> {
+    const casinos = await this.casinoModel.find().select('city').exec();
+
+    const cities = casinos.map(c => c.city);
+
+    // Убираем дубликаты по английскому названию (или любому другому ключу)
+    const unique = new Map<string, Record<string, string>>();
+
+    for (const city of cities) {
+      const key = city.en || JSON.stringify(city);
+      unique.set(key, city);
+    }
+
+    return Array.from(unique.values());
+  }
+
   async findAll(): Promise<Casino[]> {
     return this.casinoModel.find().sort({ create_date: -1 }).exec();
   }
