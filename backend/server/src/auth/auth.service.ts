@@ -44,11 +44,11 @@ export class AuthService {
     };
 
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: '10m',
+      expiresIn: '15m',
     });
 
     const refreshToken = this.jwtService.sign(payload, {
-      expiresIn: '30d',
+      expiresIn: '90d',
     });
 
     await this.refreshModel.create({
@@ -96,11 +96,11 @@ export class AuthService {
       };
 
       const newAccessToken = this.jwtService.sign(newPayload, {
-        expiresIn: '10m',
+        expiresIn: '15m',
       });
 
       const newRefreshToken = this.jwtService.sign(newPayload, {
-        expiresIn: '30d',
+        expiresIn: '90d',
       });
 
       await this.refreshModel.create({
