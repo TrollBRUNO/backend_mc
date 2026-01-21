@@ -1,5 +1,5 @@
 export class CreateNewsDto {
-  readonly title: string;
-  readonly description: string;
+  readonly title: Record<string, string>; // например: { en: 'Title', ru: 'Заголовок', bg: 'Заглавие' }
+  readonly description: Record<string, string>;
   readonly image_url: string;
 }
