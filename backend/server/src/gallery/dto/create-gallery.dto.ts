@@ -1,4 +1,4 @@
 export class CreateGalleryDto {
-  readonly description: string;
+  readonly description: Record<string, string>;
   readonly image_url: string;
 }

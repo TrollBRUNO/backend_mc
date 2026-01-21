@@ -5,11 +5,11 @@ export type CasinoDocument = Casino & Document;
 
 @Schema()
 export class Casino {
-  @Prop()
-  city: string;
+  @Prop({ type: Map, of: String })
+  city: Record<string, string>;
 
-  @Prop()
-  address: string;
+  @Prop({ type: Map, of: String })
+  address: Record<string, string>;
 
   @Prop({ default: Date.now })
   create_date: Date;

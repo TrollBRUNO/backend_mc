@@ -5,8 +5,8 @@ export type GalleryDocument = Gallery & Document;
 
 @Schema()
 export class Gallery {
-  @Prop()
-  description: string;
+  @Prop({ type: Map, of: String })
+  description: Record<string, string>;
 
   @Prop({ default: Date.now })
   create_date: Date;

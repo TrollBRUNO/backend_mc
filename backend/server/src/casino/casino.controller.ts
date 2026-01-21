@@ -42,6 +42,25 @@ export class CasinoController {
     return this.casinoService.findOne(id);
   }
 
+  // ---------- UPLOAD IMAGE ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Post('upload')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: diskStorage({
+        destination: './uploads',
+        filename: (req, file, cb) => {
+          const ext = path.extname(file.originalname);
+          cb(null, uuid() + ext);
+        },
+      }),
+    }),
+  )
+  uploadImage(@UploadedFile() file: any) {
+    const imageUrl = `/uploads/${file.filename}`;
+    return { image_url: imageUrl };
+  }
+  
   // ---------- CREATE (multipart/form-data для файла) ----------
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Post()
