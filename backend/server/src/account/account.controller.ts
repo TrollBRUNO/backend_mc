@@ -237,6 +237,14 @@ export class AccountController {
     return this.accountService.create({ ...body, image_url: imageUrl });
   }
 
+  // ---------- UPDATE NOTIFICATIONS ----------
+  @Put('notifications')
+  @UseGuards(JwtAuthGuard)
+  async updateNotifications(@Req() req, @Body() body: any) {
+    console.log('🔧 updateNotifications body:', body);
+    return this.accountService.updateNotificationSettings(req.user.sub, body);
+  }
+
   // ---------- UPDATE ----------
   @UseGuards(JwtAuthGuard)
   @Put(':id')
@@ -313,13 +321,6 @@ export class AccountController {
     @Body() dto: any
   ) {
     return this.accountService.updateCard(accountId, cardId, dto);
-  }
-
-  @Put('notifications')
-  @UseGuards(JwtAuthGuard)
-  async updateNotifications(@Req() req, @Body() body: any) {
-    console.log('🔧 updateNotifications body:', body);
-    return this.accountService.updateNotificationSettings(req.user.sub, body);
   }
 
   @UseGuards(JwtAuthGuard)
