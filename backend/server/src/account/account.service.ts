@@ -443,6 +443,7 @@ export class AccountService {
   }
 
   async updateNotificationSettings(accountId: string, settings: any) {
+    console.log('🔧 updateNotificationSettings:', settings);
     return this.accountModel.findByIdAndUpdate(accountId, {
       notification_settings: settings,
     }, { new: true });

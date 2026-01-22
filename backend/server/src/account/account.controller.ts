@@ -315,9 +315,10 @@ export class AccountController {
     return this.accountService.updateCard(accountId, cardId, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Put('notifications')
+  @UseGuards(JwtAuthGuard)
   async updateNotifications(@Req() req, @Body() body: any) {
+    console.log('🔧 updateNotifications body:', body);
     return this.accountService.updateNotificationSettings(req.user.sub, body);
   }
 
