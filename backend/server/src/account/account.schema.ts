@@ -60,7 +60,7 @@ export class Account {
       jackpot_thresholds: {
         mini: { type: Number, default: 100 },
         middle: { type: Number, default: 500 },
-        mega: { type: Number, default: 3000 },
+        mega: { type: Number, default: 750 },
       },
     },
     default: {
@@ -71,7 +71,7 @@ export class Account {
       jackpot_thresholds: {
         mini: 100,
         middle: 500,
-        mega: 3000,
+        mega: 750,
       },
     },
   })

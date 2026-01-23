@@ -47,23 +47,24 @@ export class TasksService {
     });
 
     await Promise.all(
-      accounts.map(acc => {
+      accounts.map(async acc => {
         const nextSpin = new Date(acc.last_spin_date.getTime() + 24 * 60 * 60 * 1000);
 
-        if (nextSpin <= now) {
-
-          if (acc.last_wheel_notify && now.getTime() - acc.last_wheel_notify.getTime() < 24 * 60 * 60 * 1000){ 
-            return null;
-          }
-
-          return this.pushService.send(acc.fcm_token, {
-            title: 'Колесо готово!',
-            body: 'Вы можете снова крутить колесо удачи.',
-          }).catch(() => {});
+        if (nextSpin > now) {
+          return null;
         }
 
+        if (acc.last_wheel_notify && now.getTime() - acc.last_wheel_notify.getTime() < 24 * 60 * 60 * 1000){ 
+          return null;
+        }
+
+        await this.pushService.send(acc.fcm_token, {
+          title: 'Колесо готово!',
+          body: 'Вы можете снова крутить колесо удачи.',
+        }).catch(() => {});
+
         acc.last_wheel_notify = now; 
-        acc.save();
+        await acc.save();
         
         return null;
       }),
