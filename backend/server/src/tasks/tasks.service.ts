@@ -50,7 +50,7 @@ export class TasksService {
       accounts.map(async acc => {
         const nextSpin = new Date(acc.last_spin_date.getTime() + 24 * 60 * 60 * 1000);
 
-        if (nextSpin <= now) {
+        if (nextSpin > now) {
           return null;
         }
 
@@ -62,6 +62,8 @@ export class TasksService {
           title: 'Колесо готово!',
           body: 'Вы можете снова крутить колесо удачи.',
         }).catch(() => {});
+
+        this.logger.log(`Wheel notify sent to ${acc.login}`);
 
         acc.last_wheel_notify = now; 
         await acc.save();
@@ -101,6 +103,8 @@ export class TasksService {
             body: 'У вас остался 1 час, чтобы забрать бонус.',
           }).catch(() => {});
         }
+
+        this.logger.log(`Bonus notify sent to ${a.login}`);
 
         return null;
       })
@@ -161,9 +165,11 @@ export class TasksService {
           }
 
           if (tasks.length > 0) {
+            this.logger.log(`Casino notify sent to ${u.login}`);
+
             Promise.all(tasks);
             u.last_jackpot_notify = now;
-            u.save();
+            await u.save();
           }
         }
         
