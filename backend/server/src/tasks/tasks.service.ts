@@ -50,7 +50,7 @@ export class TasksService {
       accounts.map(async acc => {
         const nextSpin = new Date(acc.last_spin_date.getTime() + 24 * 60 * 60 * 1000);
 
-        if (nextSpin > now) {
+        if (nextSpin <= now) {
           return null;
         }
 
