@@ -5,6 +5,7 @@ import { Account, AccountDocument } from '../account/account.schema';
 import { Model } from 'mongoose';
 import { PushService } from 'src/push/push.service';
 import { CasinoService } from 'src/casino/casino.service';
+import { Casino, CasinoDocument } from 'src/casino/casino.schema';
 
 @Injectable()
 export class TasksService {
@@ -12,6 +13,7 @@ export class TasksService {
 
   constructor(
     @InjectModel(Account.name) private accountModel: Model<AccountDocument>,
+    @InjectModel(Casino.name) private casinoModel: Model<CasinoDocument>,
     private readonly pushService: PushService,
     private readonly casinoService: CasinoService,
   ) {}
@@ -49,12 +51,20 @@ export class TasksService {
         const nextSpin = new Date(acc.last_spin_date.getTime() + 24 * 60 * 60 * 1000);
 
         if (nextSpin <= now) {
+
+          if (acc.last_wheel_notify && now.getTime() - acc.last_wheel_notify.getTime() < 24 * 60 * 60 * 1000){ 
+            return null;
+          }
+
           return this.pushService.send(acc.fcm_token, {
             title: 'Колесо готово!',
             body: 'Вы можете снова крутить колесо удачи.',
           }).catch(() => {});
         }
 
+        acc.last_wheel_notify = now; 
+        acc.save();
+        
         return null;
       }),
     );
@@ -75,7 +85,16 @@ export class TasksService {
         const expire = new Date(a.last_spin_date.getTime() + 24 * 60 * 60 * 1000);
         const diff = expire.getTime() - now.getTime();
 
-        if (diff < 60 * 60 * 1000 && diff > 0) {
+        // 12 часов прошло → можно забрать бонус
+        if (diff <= 12 * 60 * 60 * 1000 && diff > 11 * 60 * 60 * 1000) {
+          this.pushService.send(a.fcm_token, {
+            title: 'Можно забрать бонус!',
+            body: 'Не забудьте забрать свой бонус.',
+          }).catch(() => {});
+        }
+
+        // 1 час до сгорания
+        if (diff <= 60 * 60 * 1000 && diff > 59 * 60 * 1000) {
           this.pushService.send(a.fcm_token, {
             title: 'Бонус скоро сгорит!',
             body: 'У вас остался 1 час, чтобы забрать бонус.',
@@ -90,54 +109,67 @@ export class TasksService {
   // каждую минуту
   @Cron('* * * * *')
   async jackpotThresholdCheck() {
-    const jackpot = await this.casinoService.getJackpotValues('MAIN');
+    const now = new Date();
 
-    if (jackpot.error) {
-      this.logger.warn('Jackpot fetch failed');
-      return;
-    }
+    const casinos = await this.casinoModel.find();
 
     const users = await this.accountModel.find({
       'notification_settings.jackpot_thresholds': { $exists: true },
     });
 
    await Promise.all(
-      users.map(u => {
+      users.map(async u => {
+        if (u.last_jackpot_notify && now.getTime() - u.last_jackpot_notify.getTime() < 60 * 60 * 1000){ 
+          return null;
+        }
+
         const t = u.notification_settings.jackpot_thresholds;
-        const tasks: Promise<void>[] = [];
 
-        if (jackpot.mini > t.mini) {
-          tasks.push(
-            this.pushService.send(u.fcm_token, {
-              title: 'Mini Jackpot растёт!',
-              body: `Сейчас: ${jackpot.mini} EUR`,
-            }).catch(() => {}),
-          );
+        for (const casino of casinos) { 
+          const jackpot = await this.casinoService.getJackpotValuesForCasino(casino);
+
+          if (jackpot.error) continue;
+
+          const tasks: Promise<void>[] = [];
+
+          if (jackpot.mini > t.mini) {
+            tasks.push(
+              this.pushService.send(u.fcm_token, {
+                title: `Mini Jackpot растёт в зале ${casino.city.bg}!`,
+                body: `Сейчас: ${jackpot.mini} EUR`,
+              }).catch(() => {}),
+            );
+          }
+
+          if (jackpot.middle > t.middle) {
+            tasks.push(
+              this.pushService.send(u.fcm_token, {
+                title: `Middle Jackpot растёт в зале ${casino.city.bg}!`,
+                body: `Сейчас: ${jackpot.middle} EUR`,
+              }).catch(() => {}),
+            );
+          }
+
+          if (jackpot.mega > t.mega) {
+            tasks.push(
+              this.pushService.send(u.fcm_token, {
+                title: `Mega Jackpot растёт в зале ${casino.city.bg}!`,
+                body: `Сейчас: ${jackpot.mega} EUR`,
+              }).catch(() => {}),
+            );
+          }
+
+          if (tasks.length > 0) {
+            Promise.all(tasks);
+            u.last_jackpot_notify = now;
+            u.save();
+          }
         }
-
-        if (jackpot.middle > t.middle) {
-          tasks.push(
-            this.pushService.send(u.fcm_token, {
-              title: 'Middle Jackpot растёт!',
-              body: `Сейчас: ${jackpot.middle} EUR`,
-            }).catch(() => {}),
-          );
-        }
-
-        if (jackpot.mega > t.mega) {
-          tasks.push(
-            this.pushService.send(u.fcm_token, {
-              title: 'Mega Jackpot растёт!',
-              body: `Сейчас: ${jackpot.mega} EUR`,
-            }).catch(() => {}),
-          );
-        }
-
-        return tasks.length > 0 ? Promise.all(tasks) : Promise.resolve();
+        
+        return null;
       }),
     );
   }
-
 
   // Ежедневно в 21:00
   @Cron('0 21 * * *')

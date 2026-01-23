@@ -63,7 +63,17 @@ export class Account {
         mega: { type: Number, default: 3000 },
       },
     },
-    default: {},
+    default: {
+      wheel_ready: true,
+      bonus_reminder: true,
+      news_post: true,
+      jackpot_win_post: true,
+      jackpot_thresholds: {
+        mini: 100,
+        middle: 500,
+        mega: 3000,
+      },
+    },
   })
   notification_settings: {
     wheel_ready: boolean;
@@ -102,6 +112,15 @@ export class Account {
   @Prop({ default: 0 })
   token_version: number;
 
+  @Prop({ type: Date, default: null }) last_wheel_notify: Date | null; 
+
+  //@Prop({ type: Date, default: null }) last_bonus_notify: Date | null;
+
+  @Prop({ type: Date, default: null }) last_jackpot_notify: Date | null; 
+
+  @Prop({ type: Date, default: null }) last_new_notify: Date | null; 
+  
+  @Prop({ type: Date, default: null }) last_gallery_notify: Date | null;
 }
 
 export const AccountSchema = SchemaFactory.createForClass(Account);

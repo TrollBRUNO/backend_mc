@@ -6,6 +6,7 @@ import { CreateNewsDto } from './dto/create-news.dto';
 import { UpdateNewsDto } from './dto/update-news.dto';
 import { Account, AccountDocument } from 'src/account/account.schema';
 import { PushService } from 'src/push/push.service';
+import e from 'express';
 
 @Injectable()
 export class NewsService {
@@ -26,17 +27,26 @@ export class NewsService {
   }  
 
   async create(dto: CreateNewsDto): Promise<News> {
+    const now = new Date();
+
     const news = new this.newsModel(dto);
 
     const users = await this.accountModel.find({ 'notification_settings.news_post': true, }); 
 
     await Promise.all(
-      users.map(u =>
+      users.map(u => {
+        if (u.last_new_notify && now.getTime() - u.last_new_notify.getTime() < 24 * 60 * 60 * 1000) { 
+          return null;
+        }
+
         this.pushService.send(u.fcm_token, {
           title: 'Новая новость!',
           body: 'В галерее появился новый пост.',
         }).catch(() => {}),
-      ),
+
+        u.last_new_notify = now; 
+        u.save();
+      }),
     );
 
     return news.save();

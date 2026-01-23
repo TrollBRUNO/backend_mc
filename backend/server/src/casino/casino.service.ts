@@ -85,4 +85,29 @@ export class CasinoService {
       };
     }
   }
+
+  async getJackpotValuesForCasino(casino: CasinoDocument) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      const response = await fetch(casino.jackpot_url, {
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        throw new Error(`Jackpot server responded with ${response.status}`);
+      }
+
+      return await response.json(); // { mini, middle, mega }
+    } catch (error) {
+      return {
+        error: true,
+        message: 'Failed to load jackpot data',
+        details: error.message,
+      };
+    }
+  }
 }

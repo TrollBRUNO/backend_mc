@@ -26,17 +26,26 @@ export class GalleryService {
   }  
 
   async create(dto: CreateGalleryDto): Promise<Gallery> {
+    const now = new Date();
+
     const gallery = new this.galleryModel(dto);
 
     const users = await this.accountModel.find({ 'notification_settings.jackpot_win_post': true, }); 
 
     await Promise.all(
-      users.map(u =>
+      users.map(u => {
+        if (u.last_gallery_notify && now.getTime() - u.last_gallery_notify.getTime() < 24 * 60 * 60 * 1000) { 
+          return null;
+        }
+        
         this.pushService.send(u.fcm_token, {
           title: 'Новый выигрыш!',
           body: 'В галерее появился новый выигрыш.',
         }).catch(() => {}),
-      ),
+        
+        u.last_gallery_notify = now; 
+        u.save();
+      }),
     );
 
     return gallery.save();
