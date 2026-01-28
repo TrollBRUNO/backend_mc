@@ -76,8 +76,10 @@ export class AccountService {
 
     // 2️⃣ карта уникальна
     if (dto.cards?.length) {
-      const cardId = dto.cards[0].card_id;
+      const cardId = dto.cards[0].card_id.toUpperCase();
       await this.checkCardAvailability(cardId);
+
+      dto.cards[0].card_id = cardId;
     }
 
     const hash = await bcrypt.hash(dto.password, 10);
@@ -166,13 +168,15 @@ export class AccountService {
     accountId: string,
     dto: { card_id: string; city: string },
   ) {
-    await this.checkCardAvailability(dto.card_id);
+    const cardId = dto.card_id.toUpperCase();
+
+    await this.checkCardAvailability(cardId);
 
     const account = await this.accountModel.findById(accountId);
     if (!account) throw new NotFoundException('Account not found');
 
     const card = {
-      card_id: dto.card_id,
+      card_id: cardId,
       city: dto.city,
       active: true,
     };
