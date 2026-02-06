@@ -183,6 +183,7 @@ export class AccountController {
       balance: account.balance ?? 0,
       bonus_balance: account.bonus_balance.toString() ?? 0,
       fake_balance: account.fake_balance.toString() ?? 0,
+      fake_balance_int: account.fake_balance ?? 0,
       last_credit_take_date: account.last_credit_take_date ?? null,
       role: account.role,
       image_url: account.image_url,
