@@ -133,6 +133,12 @@ export class WheelService {
     return { amount: prize };
   }
 
+  async getDemoStatus(demo_id: string): Promise<{ valid: boolean; amount?: number }> {
+    const doc = await this.demoSpinModel.findOne({ demo_id }).exec();
+    if (!doc) return { valid: false };
+    return { valid: true, amount: doc.amount };
+  }
+
   async claimDemoBonus(accountId: string, demo_id: string): Promise<{ bonus_balance: any }> {
     const demoSpin = await this.demoSpinModel.findOne({ demo_id }).exec();
     if (!demoSpin) throw new BadRequestException('DEMO_NOT_FOUND');

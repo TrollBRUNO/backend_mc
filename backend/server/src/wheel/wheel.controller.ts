@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   Req,
   BadRequestException,
@@ -81,6 +82,13 @@ export class WheelController {
     }
 
     return this.wheelService.spin(req.user.sub, wheel);
+  }
+
+  // ---------- DEMO STATUS ----------
+  @Get('demo/status')
+  async demoStatus(@Query('demo_id') demoId: string) {
+    if (!demoId) throw new BadRequestException('demo_id is required');
+    return this.wheelService.getDemoStatus(demoId);
   }
 
   // ---------- DEMO SPIN (публичный) ----------
