@@ -4,8 +4,11 @@ import { Model } from 'mongoose';
 import { Account, AccountDocument } from '../account/account.schema';
 import { Statistics, StatisticsDocument } from '../statistics/statistics.schema';
 import { Wheel, WheelDocument } from './wheel.schema';
+import { DemoSpin, DemoSpinDocument } from './demo-spin.schema';
 import { CreateWheelDto } from './dto/create-wheel.dto';
 import { UpdateWheelDto } from './dto/update-wheel.dto';
+
+const DEMO_PRIZES = [10, 10, 10, 10, 15, 15, 20, 20, 25, 25, 40, 50, 100];
 
 @Injectable()
 export class WheelService {
@@ -13,6 +16,7 @@ export class WheelService {
     @InjectModel(Wheel.name) private wheelModel: Model<WheelDocument>,
     @InjectModel(Account.name) private accountModel: Model<AccountDocument>,
     @InjectModel(Statistics.name) private statModel: Model<StatisticsDocument>,
+    @InjectModel(DemoSpin.name) private demoSpinModel: Model<DemoSpinDocument>,
   ) {}
 
   async findAll(): Promise<Wheel[]> {
@@ -117,5 +121,40 @@ export class WheelService {
       prize,
       bonus_balance: account.bonus_balance,
     };
+  }
+
+  async demoSpin(demo_id: string): Promise<{ amount: number }> {
+    const existing = await this.demoSpinModel.findOne({ demo_id }).exec();
+    if (existing) throw new BadRequestException('DEMO_ALREADY_USED');
+
+    const prize = DEMO_PRIZES[Math.floor(Math.random() * DEMO_PRIZES.length)];
+    await this.demoSpinModel.create({ demo_id, amount: prize });
+
+    return { amount: prize };
+  }
+
+  async claimDemoBonus(accountId: string, demo_id: string): Promise<{ bonus_balance: any }> {
+    const demoSpin = await this.demoSpinModel.findOne({ demo_id }).exec();
+    if (!demoSpin) throw new BadRequestException('DEMO_NOT_FOUND');
+
+    const account = await this.accountModel.findById(accountId);
+    if (!account) throw new NotFoundException('Account not found');
+
+    const now = new Date();
+    const currentBonus = Number(account.bonus_balance ?? 0);
+    account.bonus_balance = (currentBonus + demoSpin.amount) as any;
+    account.last_spin_date = now;
+
+    await account.save();
+
+    await this.statModel.create({
+      user_id: accountId,
+      prize_count: demoSpin.amount,
+      spin_date: now,
+    });
+
+    await this.demoSpinModel.deleteOne({ demo_id }).exec();
+
+    return { bonus_balance: account.bonus_balance };
   }
 }

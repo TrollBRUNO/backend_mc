@@ -5,6 +5,7 @@ import { WheelService } from './wheel.service';
 import { WheelController } from './wheel.controller';
 import { Statistics, StatisticsSchema } from 'src/statistics/statistics.schema';
 import { Account, AccountSchema } from 'src/account/account.schema';
+import { DemoSpin, DemoSpinSchema } from './demo-spin.schema';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { Account, AccountSchema } from 'src/account/account.schema';
         { name: Wheel.name, schema: WheelSchema },
         { name: Account.name, schema: AccountSchema },
         { name: Statistics.name, schema: StatisticsSchema },
+        { name: DemoSpin.name, schema: DemoSpinSchema },
       ])
     ],
   providers: [WheelService],

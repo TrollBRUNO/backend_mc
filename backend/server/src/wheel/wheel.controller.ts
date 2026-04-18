@@ -82,4 +82,19 @@ export class WheelController {
 
     return this.wheelService.spin(req.user.sub, wheel);
   }
+
+  // ---------- DEMO SPIN (публичный) ----------
+  @Post('demo/spin')
+  async demoSpin(@Body('demo_id') demoId: string) {
+    if (!demoId) throw new BadRequestException('demo_id is required');
+    return this.wheelService.demoSpin(demoId);
+  }
+
+  // ---------- DEMO CLAIM ----------
+  @UseGuards(JwtAuthGuard)
+  @Post('demo/claim')
+  async claimDemo(@Req() req, @Body('demo_id') demoId: string) {
+    if (!demoId) throw new BadRequestException('demo_id is required');
+    return this.wheelService.claimDemoBonus(req.user.sub, demoId);
+  }
 }
