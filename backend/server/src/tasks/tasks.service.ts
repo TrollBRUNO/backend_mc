@@ -31,6 +31,8 @@ export class TasksService {
 
     for (const acc of expired) {
       acc.bonus_balance = 0 as any;
+      acc.bonus_notified_12h = null;
+      acc.bonus_notified_1h = null;
       await acc.save();
       this.logger.log(`Bonus reset for ${acc.login}`);
     }
@@ -84,27 +86,37 @@ export class TasksService {
     });
 
     await Promise.all(
-      accounts.map(a => {
+      accounts.map(async a => {
         const expire = new Date(a.last_spin_date.getTime() + 24 * 60 * 60 * 1000);
         const diff = expire.getTime() - now.getTime();
 
         // 12 часов прошло → можно забрать бонус
         if (diff <= 12 * 60 * 60 * 1000 && diff > 11 * 60 * 60 * 1000) {
-          this.pushService.send(a.fcm_token, {
-            title: 'Можно забрать бонус!',
-            body: 'Не забудьте забрать свой бонус.',
-          }).catch(() => {});
+          const alreadySent = a.bonus_notified_12h &&
+            (now.getTime() - a.bonus_notified_12h.getTime()) < 60 * 60 * 1000;
+          if (!alreadySent) {
+            await this.pushService.send(a.fcm_token, {
+              title: 'Можно забрать бонус!',
+              body: 'Не забудьте забрать свой бонус.',
+            }).catch(() => {});
+            await this.accountModel.updateOne({ _id: a._id }, { bonus_notified_12h: now });
+            this.logger.log(`Bonus 12h notify sent to ${a.login}`);
+          }
         }
 
         // 1 час до сгорания
         if (diff <= 60 * 60 * 1000 && diff > 59 * 60 * 1000) {
-          this.pushService.send(a.fcm_token, {
-            title: 'Бонус скоро сгорит!',
-            body: 'У вас остался 1 час, чтобы забрать бонус.',
-          }).catch(() => {});
+          const alreadySent = a.bonus_notified_1h &&
+            (now.getTime() - a.bonus_notified_1h.getTime()) < 60 * 60 * 1000;
+          if (!alreadySent) {
+            await this.pushService.send(a.fcm_token, {
+              title: 'Бонус скоро сгорит!',
+              body: 'У вас остался 1 час, чтобы забрать бонус.',
+            }).catch(() => {});
+            await this.accountModel.updateOne({ _id: a._id }, { bonus_notified_1h: now });
+            this.logger.log(`Bonus 1h notify sent to ${a.login}`);
+          }
         }
-
-        this.logger.log(`Bonus notify sent to ${a.login}`);
 
         return null;
       })

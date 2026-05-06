@@ -112,11 +112,12 @@ export class Account {
   @Prop({ default: 0 })
   token_version: number;
 
-  @Prop({ type: Date, default: null }) last_wheel_notify: Date | null; 
+  @Prop({ type: Date, default: null }) last_wheel_notify: Date | null;
 
-  //@Prop({ type: Date, default: null }) last_bonus_notify: Date | null;
+  @Prop({ type: Date, default: null }) bonus_notified_12h: Date | null;
+  @Prop({ type: Date, default: null }) bonus_notified_1h: Date | null;
 
-  @Prop({ type: Date, default: null }) last_jackpot_notify: Date | null; 
+  @Prop({ type: Date, default: null }) last_jackpot_notify: Date | null;
 
   @Prop({ type: Date, default: null }) last_new_notify: Date | null; 
   
