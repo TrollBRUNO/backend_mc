@@ -57,6 +57,7 @@ export class Account {
       bonus_reminder: { type: Boolean, default: true },
       news_post: { type: Boolean, default: true },
       jackpot_win_post: { type: Boolean, default: true },
+      jackpot_enabled: { type: Boolean, default: true },
       jackpot_thresholds: {
         mini: { type: Number, default: 100 },
         middle: { type: Number, default: 500 },
@@ -68,6 +69,7 @@ export class Account {
       bonus_reminder: true,
       news_post: true,
       jackpot_win_post: true,
+      jackpot_enabled: true,
       jackpot_thresholds: {
         mini: 100,
         middle: 500,
@@ -80,6 +82,7 @@ export class Account {
     bonus_reminder: boolean;
     news_post: boolean;
     jackpot_win_post: boolean;
+    jackpot_enabled: boolean;
     jackpot_thresholds: {
       mini: number;
       middle: number;

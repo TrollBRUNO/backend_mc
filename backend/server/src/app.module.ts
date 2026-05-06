@@ -15,6 +15,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PushModule } from './push/push.module';
 import { TasksModule } from './tasks/tasks.module';
+import { NotificationLogModule } from './notification-log/notification-log.module';
 
 @Module({
   imports: [
@@ -35,7 +36,8 @@ import { TasksModule } from './tasks/tasks.module';
     BonusCodeModule,
     ScheduleModule.forRoot(),
     PushModule,
-    TasksModule
+    TasksModule,
+    NotificationLogModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,11 +1,27 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
 import { Account, AccountDocument } from '../account/account.schema';
-import { Model } from 'mongoose';
+import { Casino, CasinoDocument } from 'src/casino/casino.schema';
 import { PushService } from 'src/push/push.service';
 import { CasinoService } from 'src/casino/casino.service';
-import { Casino, CasinoDocument } from 'src/casino/casino.schema';
+import { NotificationLogService } from 'src/notification-log/notification-log.service';
+import { NotificationLogType } from 'src/notification-log/notification-log.schema';
+
+interface JackpotValues {
+  mini: number;
+  middle: number;
+  mega: number;
+}
+
+interface JackpotError {
+  error: true;
+  message: string;
+  details: string;
+}
+
+type JackpotResult = JackpotValues | JackpotError;
 
 @Injectable()
 export class TasksService {
@@ -16,6 +32,7 @@ export class TasksService {
     @InjectModel(Casino.name) private casinoModel: Model<CasinoDocument>,
     private readonly pushService: PushService,
     private readonly casinoService: CasinoService,
+    private readonly notificationLogService: NotificationLogService,
   ) {}
 
   // Каждую минуту
@@ -38,8 +55,8 @@ export class TasksService {
     }
   }
 
-  // каждую минуту
-  @Cron('* * * * *') 
+  // Каждую минуту
+  @Cron('* * * * *')
   async wheelReadyNotify() {
     const now = new Date();
 
@@ -48,34 +65,38 @@ export class TasksService {
       last_spin_date: { $ne: null },
     });
 
-    await Promise.all(
-      accounts.map(async acc => {
-        const nextSpin = new Date(acc.last_spin_date.getTime() + 24 * 60 * 60 * 1000);
+    for (const acc of accounts) {
+      const nextSpin = new Date(acc.last_spin_date.getTime() + 24 * 60 * 60 * 1000);
+      if (nextSpin > now) continue;
 
-        if (nextSpin > now) {
-          return null;
-        }
+      const accountId = acc._id as unknown as Types.ObjectId;
 
-        if (acc.last_wheel_notify && now.getTime() - acc.last_wheel_notify.getTime() < 24 * 60 * 60 * 1000){ 
-          return null;
-        }
+      // Не более 3 напоминаний подряд без нового спина
+      const sentCount = await this.notificationLogService.countOfTypeSince(
+        accountId,
+        NotificationLogType.WHEEL_READY,
+        acc.last_spin_date,
+      );
+      if (sentCount >= 3) continue;
 
-        await this.pushService.send(acc.fcm_token, {
-          title: 'Колесо готово!',
-          body: 'Вы можете снова крутить колесо удачи.',
-        }).catch(() => {});
+      // Не чаще раза в 24ч
+      const lastWheel = await this.notificationLogService.getLastOfType(
+        accountId,
+        NotificationLogType.WHEEL_READY,
+      );
+      if (lastWheel && now.getTime() - lastWheel.getTime() < 24 * 60 * 60 * 1000) continue;
 
-        this.logger.log(`Wheel notify sent to ${acc.login}`);
+      await this.pushService.send(acc.fcm_token, {
+        title: 'Колесо готово!',
+        body: 'Вы можете снова крутить колесо удачи.',
+      }).catch(() => {});
 
-        acc.last_wheel_notify = now; 
-        await acc.save();
-        
-        return null;
-      }),
-    );
+      await this.notificationLogService.log(accountId, NotificationLogType.WHEEL_READY);
+      this.logger.log(`[wheel] notify sent to ${acc.login}`);
+    }
   }
 
-  // каждую минуту
+  // Каждую минуту
   @Cron('* * * * *')
   async bonusReminder() {
     const now = new Date();
@@ -90,7 +111,7 @@ export class TasksService {
         const expire = new Date(a.last_spin_date.getTime() + 24 * 60 * 60 * 1000);
         const diff = expire.getTime() - now.getTime();
 
-        // 12 часов прошло → можно забрать бонус
+        // осталось 12–11 часов до сгорания бонуса → напоминаем
         if (diff <= 12 * 60 * 60 * 1000 && diff > 11 * 60 * 60 * 1000) {
           const alreadySent = a.bonus_notified_12h &&
             (now.getTime() - a.bonus_notified_12h.getTime()) < 60 * 60 * 1000;
@@ -123,85 +144,143 @@ export class TasksService {
     );
   }
 
-  // каждую минуту
-  @Cron('* * * * *')
+  // Каждый час
+  @Cron('0 * * * *')
   async jackpotThresholdCheck() {
-    const now = new Date();
-
     const casinos = await this.casinoModel.find();
 
     const users = await this.accountModel.find({
-      'notification_settings.jackpot_thresholds': { $exists: true },
+      is_blocked: false,
+      fcm_token: { $exists: true, $ne: null },
+      'notification_settings.jackpot_enabled': true,
     });
 
-   await Promise.all(
-      users.map(async u => {
-        if (u.last_jackpot_notify && now.getTime() - u.last_jackpot_notify.getTime() < 60 * 60 * 1000){ 
-          return null;
+    for (const u of users) {
+      // TODO гранулярность: сейчас один порог для всех казино.
+      // В будущем: читать индивидуальный порог per casino_id
+      // и фильтровать notification_logs по casino_id.
+      const thresholds = u.notification_settings.jackpot_thresholds;
+      const accountId = u._id as unknown as Types.ObjectId;
+
+      for (const casino of casinos) {
+        const result: JackpotResult = await this.casinoService.getJackpotValuesForCasino(casino);
+        if ('error' in result) continue;
+
+        type JackpotTask = {
+          type: NotificationLogType;
+          jackpotValue: number;
+          promise: Promise<void>;
+        };
+
+        const tasks: JackpotTask[] = [];
+
+        if (result.mini >= thresholds.mini) {
+          tasks.push({
+            type: NotificationLogType.JACKPOT_MINI,
+            jackpotValue: result.mini,
+            promise: this.pushService.send(u.fcm_token, {
+              title: `Mini Jackpot растёт в зале ${casino.city.bg}!`,
+              body: `Сейчас: ${result.mini} EUR`,
+            }),
+          });
         }
 
-        const t = u.notification_settings.jackpot_thresholds;
+        if (result.middle >= thresholds.middle) {
+          tasks.push({
+            type: NotificationLogType.JACKPOT_MIDDLE,
+            jackpotValue: result.middle,
+            promise: this.pushService.send(u.fcm_token, {
+              title: `Middle Jackpot растёт в зале ${casino.city.bg}!`,
+              body: `Сейчас: ${result.middle} EUR`,
+            }),
+          });
+        }
 
-        for (const casino of casinos) { 
-          const jackpot = await this.casinoService.getJackpotValuesForCasino(casino);
+        if (result.mega >= thresholds.mega) {
+          tasks.push({
+            type: NotificationLogType.JACKPOT_MEGA,
+            jackpotValue: result.mega,
+            promise: this.pushService.send(u.fcm_token, {
+              title: `Mega Jackpot растёт в зале ${casino.city.bg}!`,
+              body: `Сейчас: ${result.mega} EUR`,
+            }),
+          });
+        }
 
-          if (jackpot.error) continue;
+        if (tasks.length === 0) continue;
 
-          const tasks: Promise<void>[] = [];
+        const results = await Promise.allSettled(tasks.map(t => t.promise));
 
-          if (jackpot.mini > t.mini) {
-            tasks.push(
-              this.pushService.send(u.fcm_token, {
-                title: `Mini Jackpot растёт в зале ${casino.city.bg}!`,
-                body: `Сейчас: ${jackpot.mini} EUR`,
-              }).catch(() => {}),
-            );
-          }
-
-          if (jackpot.middle > t.middle) {
-            tasks.push(
-              this.pushService.send(u.fcm_token, {
-                title: `Middle Jackpot растёт в зале ${casino.city.bg}!`,
-                body: `Сейчас: ${jackpot.middle} EUR`,
-              }).catch(() => {}),
-            );
-          }
-
-          if (jackpot.mega > t.mega) {
-            tasks.push(
-              this.pushService.send(u.fcm_token, {
-                title: `Mega Jackpot растёт в зале ${casino.city.bg}!`,
-                body: `Сейчас: ${jackpot.mega} EUR`,
-              }).catch(() => {}),
-            );
-          }
-
-          if (tasks.length > 0) {
-            this.logger.log(`Casino notify sent to ${u.login}`);
-
-            Promise.all(tasks);
-            u.last_jackpot_notify = now;
-            await u.save();
+        for (let i = 0; i < results.length; i++) {
+          const settled = results[i];
+          const task = tasks[i];
+          if (settled.status === 'fulfilled') {
+            await this.notificationLogService.log(accountId, task.type, {
+              casino_id: (casino._id as any).toString(),
+              jackpot_value: task.jackpotValue,
+            });
+            this.logger.log(`[jackpot] ${task.type} sent to ${u.login} (${casino.city.bg})`);
+          } else {
+            this.logger.error(`[jackpot] ${task.type} failed for ${u.login}: ${settled.reason}`);
           }
         }
-        
-        return null;
-      }),
-    );
+      }
+    }
   }
 
-  // Ежедневно в 21:00
-  @Cron('0 21 * * *')
+  // Ежедневно в 9:00
+  @Cron('0 9 * * *')
   async nightlyReminder() {
-    const users = await this.accountModel.find().select('_id fcm_token');
+    const now = new Date();
 
-    await Promise.all(
-      users.map(u =>
-        this.pushService.send(u.fcm_token, {
-          title: 'Не забывайте!',
-          body: 'Загляните в казино — вас ждёт удача!',
-        }).catch(() => {}),
-      ),
-    );
+    const users = await this.accountModel
+      .find({
+        is_blocked: false,
+        fcm_token: { $exists: true, $ne: null },
+        'notification_settings.bonus_reminder': true,
+      })
+      .select('_id fcm_token login');
+
+    for (const u of users) {
+      const accountId = u._id as unknown as Types.ObjectId;
+
+      // Недавно было любое уведомление — не беспокоим
+      const lastSent = await this.notificationLogService.getLastSentAt(accountId);
+      if (lastSent && now.getTime() - lastSent.getTime() < 48 * 60 * 60 * 1000) {
+        continue;
+      }
+
+      // 2 nightly подряд без других пушей между ними — замолкаем
+      const lastTwo = await this.notificationLogService.getLastN(
+        accountId,
+        NotificationLogType.NIGHTLY_REMINDER,
+        2,
+      );
+      if (lastTwo.length === 2) {
+        const otherAfter = await this.notificationLogService.countOtherTypes(
+          accountId,
+          NotificationLogType.NIGHTLY_REMINDER,
+          lastTwo[1].sent_at, // самое раннее из двух
+        );
+        if (otherAfter === 0) continue;
+      }
+
+      // Слать не чаще раза в 3 дня
+      const lastNightly = await this.notificationLogService.getLastOfType(
+        accountId,
+        NotificationLogType.NIGHTLY_REMINDER,
+      );
+      if (lastNightly && now.getTime() - lastNightly.getTime() < 3 * 24 * 60 * 60 * 1000) {
+        continue;
+      }
+
+      await this.pushService.send(u.fcm_token, {
+        title: 'Не забывайте!',
+        body: 'Загляните в казино — вас ждёт удача!',
+      }).catch(() => {});
+
+      await this.notificationLogService.log(accountId, NotificationLogType.NIGHTLY_REMINDER);
+      this.logger.log(`[nightly] sent to ${u.login}`);
+    }
   }
 }
