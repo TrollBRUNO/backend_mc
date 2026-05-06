@@ -228,8 +228,8 @@ export class TasksService {
     }
   }
 
-  // Ежедневно в 9:00
-  @Cron('0 9 * * *')
+  // Ежедневно в 18:00
+  @Cron('0 18 * * *')
   async nightlyReminder() {
     const now = new Date();
 
