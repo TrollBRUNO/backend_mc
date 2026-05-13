@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Magic City App</title>
+</head>
+<body>
+<script>
+  const ua = navigator.userAgent;
+  if (/android/i.test(ua)) {
+    window.location = "https://play.google.com/store/apps/details?id=com.magic_city.first_app_flutter&pli=1";
+  } else if (/iphone|ipad|ipod/i.test(ua)) {
+    window.location = "https://apps.apple.com/bg/app/magic-city-app/id6760367784";
+  } else {
+    window.location = "https://magicity.top";
+  }
+</script>
+<noscript>
+  <p><a href="https://play.google.com/store/apps/details?id=com.magic_city.first_app_flutter">Android — Google Play</a></p>
+  <p><a href="https://apps.apple.com/bg/app/magic-city-app/id6760367784">iOS — App Store</a></p>
+</noscript>
+</body>
+</html>
