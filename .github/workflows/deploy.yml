@@ -18,6 +18,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
+          port: ${{ secrets.VPS_PORT }}
           source: "backend/server/**"
           strip_components: 2
           target: "/home/linuxuser/backend_mc/backend/server"
@@ -28,6 +29,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
+          port: ${{ secrets.VPS_PORT }}
           script: |
             cd /home/linuxuser/backend_mc/backend/server
             docker compose down
