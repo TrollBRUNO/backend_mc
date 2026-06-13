@@ -3,8 +3,8 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { News, NewsSchema } from './news.schema';
 import { NewsService } from './news.service';
 import { NewsController } from './news.controller';
-import { Account, AccountSchema } from 'src/account/account.schema';
-import { PushService } from 'src/push/push.service';
+import { Account, AccountSchema } from '../account/account.schema';
+import { PushService } from '../push/push.service';
 
 @Module({
   imports: [

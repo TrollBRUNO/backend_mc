@@ -3,7 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { Account, AccountSchema } from './account.schema';
 import { AccountService } from './account.service';
 import { AccountController } from './account.controller';
-import { PushModule } from 'src/push/push.module';
+import { PushModule } from '../push/push.module';
 
 @Module({
   imports: [

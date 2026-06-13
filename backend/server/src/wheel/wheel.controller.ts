@@ -17,8 +17,8 @@ import { diskStorage } from 'multer';
 import { WheelService } from './wheel.service';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { AdminGuard } from 'src/auth/guards/admin.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AdminGuard } from '../auth/guards/admin.guard';
 
 @Controller('wheel')
 export class WheelController {

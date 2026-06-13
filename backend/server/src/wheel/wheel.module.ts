@@ -3,8 +3,8 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { Wheel, WheelSchema } from './wheel.schema';
 import { WheelService } from './wheel.service';
 import { WheelController } from './wheel.controller';
-import { Statistics, StatisticsSchema } from 'src/statistics/statistics.schema';
-import { Account, AccountSchema } from 'src/account/account.schema';
+import { Statistics, StatisticsSchema } from '../statistics/statistics.schema';
+import { Account, AccountSchema } from '../account/account.schema';
 import { DemoSpin, DemoSpinSchema } from './demo-spin.schema';
 
 @Module({

@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Account, AccountDocument } from 'src/account/account.schema';
+import { Account, AccountDocument } from '../account/account.schema';
 import { BonusCode, BonusCodeDocument } from './bonus-code.schema';
 
 @Injectable()

@@ -19,8 +19,8 @@ import { v4 as uuid } from 'uuid';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Patch, Req, UseGuards } from '@nestjs/common/decorators';
 import { BindCardDto } from './dto/create-card.dto';
-import { AdminGuard } from 'src/auth/guards/admin.guard';
-import { PushService } from 'src/push/push.service';
+import { AdminGuard } from '../auth/guards/admin.guard';
+import { PushService } from '../push/push.service';
 
 @Controller('account')
 export class AccountController {

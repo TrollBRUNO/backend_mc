@@ -1,10 +1,10 @@
 import { Module } from "@nestjs/common";
 import { MongooseModule } from "@nestjs/mongoose";
-import { Account, AccountSchema } from "src/account/account.schema";
-import { CasinoModule } from "src/casino/casino.module";
+import { Account, AccountSchema } from "../account/account.schema";
+import { CasinoModule } from "../casino/casino.module";
 import { TasksService } from "./tasks.service";
-import { PushModule } from "src/push/push.module";
-import { NotificationLogModule } from "src/notification-log/notification-log.module";
+import { PushModule } from "../push/push.module";
+import { NotificationLogModule } from "../notification-log/notification-log.module";
 
 @Module({
   imports: [

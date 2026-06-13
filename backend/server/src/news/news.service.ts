@@ -4,8 +4,8 @@ import { Model } from 'mongoose';
 import { News, NewsDocument } from './news.schema';
 import { CreateNewsDto } from './dto/create-news.dto';
 import { UpdateNewsDto } from './dto/update-news.dto';
-import { Account, AccountDocument } from 'src/account/account.schema';
-import { PushService } from 'src/push/push.service';
+import { Account, AccountDocument } from '../account/account.schema';
+import { PushService } from '../push/push.service';
 import e from 'express';
 
 @Injectable()

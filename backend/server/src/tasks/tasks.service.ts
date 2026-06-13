@@ -3,11 +3,11 @@ import { Cron } from '@nestjs/schedule';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Account, AccountDocument } from '../account/account.schema';
-import { Casino, CasinoDocument } from 'src/casino/casino.schema';
-import { PushService } from 'src/push/push.service';
-import { CasinoService } from 'src/casino/casino.service';
-import { NotificationLogService } from 'src/notification-log/notification-log.service';
-import { NotificationLogType } from 'src/notification-log/notification-log.schema';
+import { Casino, CasinoDocument } from '../casino/casino.schema';
+import { PushService } from '../push/push.service';
+import { CasinoService } from '../casino/casino.service';
+import { NotificationLogService } from '../notification-log/notification-log.service';
+import { NotificationLogType } from '../notification-log/notification-log.schema';
 
 interface JackpotValues {
   mini: number;

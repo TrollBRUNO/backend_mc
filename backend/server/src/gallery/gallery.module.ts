@@ -3,8 +3,8 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { Gallery, GallerySchema } from './gallery.schema';
 import { GalleryService } from './gallery.service';
 import { GalleryController } from './gallery.controller';
-import { Account, AccountSchema } from 'src/account/account.schema';
-import { PushService } from 'src/push/push.service';
+import { Account, AccountSchema } from '../account/account.schema';
+import { PushService } from '../push/push.service';
 
 @Module({
   imports: [

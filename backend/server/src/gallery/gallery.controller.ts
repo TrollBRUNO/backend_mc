@@ -17,7 +17,7 @@ import { GalleryService } from './gallery.service';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
 import { AdminGuard } from '../auth/guards/admin.guard';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('gallery')
 export class GalleryController {

@@ -4,8 +4,8 @@ import { Model } from 'mongoose';
 import { Gallery, GalleryDocument } from './gallery.schema';
 import { CreateGalleryDto } from './dto/create-gallery.dto';
 import { UpdateGalleryDto } from './dto/update-gallery.dto';
-import { Account, AccountDocument } from 'src/account/account.schema';
-import { PushService } from 'src/push/push.service';
+import { Account, AccountDocument } from '../account/account.schema';
+import { PushService } from '../push/push.service';
 
 @Injectable()
 export class GalleryService {
