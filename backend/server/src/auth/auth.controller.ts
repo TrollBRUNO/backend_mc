@@ -9,11 +9,13 @@ import {
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService, private readonly configService: ConfigService) {}
 
+  @Throttle({ auth: { ttl: 60000, limit: 20 } })
   @Post('login')
   login(@Body() dto: LoginDto, @Req() req) {
     if (!dto.login || !dto.password) {

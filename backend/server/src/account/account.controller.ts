@@ -21,6 +21,7 @@ import { Patch, Req, UseGuards } from '@nestjs/common/decorators';
 import { BindCardDto } from './dto/create-card.dto';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { PushService } from '../push/push.service';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('account')
 export class AccountController {
@@ -154,6 +155,7 @@ export class AccountController {
   } */
 
   // ---------- REGISTER ----------
+  @Throttle({ auth: { ttl: 60000, limit: 20 } })
   @Post('register')
   async register(@Body() dto: any) {
     const { login, password, realname, cards, role } = dto;

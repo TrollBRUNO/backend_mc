@@ -16,6 +16,8 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { PushModule } from './push/push.module';
 import { TasksModule } from './tasks/tasks.module';
 import { NotificationLogModule } from './notification-log/notification-log.module';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 
 @Module({
   imports: [
@@ -38,8 +40,15 @@ import { NotificationLogModule } from './notification-log/notification-log.modul
     PushModule,
     TasksModule,
     NotificationLogModule,
+    ThrottlerModule.forRoot([
+      { name: 'global', ttl: 60000, limit: 400 },
+      { name: 'auth', ttl: 60000, limit: 20 },
+    ]),
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}
