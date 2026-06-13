@@ -15,7 +15,7 @@ import { Throttle } from '@nestjs/throttler';
 export class AuthController {
   constructor(private readonly authService: AuthService, private readonly configService: ConfigService) {}
 
-  @Throttle({ auth: { ttl: 60000, limit: 20 } })
+  @Throttle({ global: { ttl: 60000, limit: 20 } })
   @Post('login')
   login(@Body() dto: LoginDto, @Req() req) {
     if (!dto.login || !dto.password) {

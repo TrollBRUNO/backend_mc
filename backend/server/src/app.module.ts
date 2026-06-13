@@ -42,7 +42,6 @@ import { APP_GUARD } from '@nestjs/core';
     NotificationLogModule,
     ThrottlerModule.forRoot([
       { name: 'global', ttl: 60000, limit: 400 },
-      { name: 'auth', ttl: 60000, limit: 20 },
     ]),
   ],
   controllers: [AppController],

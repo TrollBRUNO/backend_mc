@@ -155,7 +155,7 @@ export class AccountController {
   } */
 
   // ---------- REGISTER ----------
-  @Throttle({ auth: { ttl: 60000, limit: 20 } })
+  @Throttle({ global: { ttl: 60000, limit: 20 } })
   @Post('register')
   async register(@Body() dto: any) {
     const { login, password, realname, cards, role } = dto;
