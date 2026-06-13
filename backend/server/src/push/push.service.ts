@@ -32,7 +32,7 @@ export class PushService {
         },
       });
     } catch (e) {
-      console.warn('Push send failed:', e.message);
+      console.warn('Push send failed:', e instanceof Error ? e.message : String(e));
     }
   }
 }

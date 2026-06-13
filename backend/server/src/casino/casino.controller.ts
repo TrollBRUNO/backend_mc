@@ -115,7 +115,7 @@ export class CasinoController {
         return {
           error: true,
           message: 'Failed to load jackpot data',
-          details: error.message,
+          details: error instanceof Error ? error.message : String(error),
         };
       }
   }
