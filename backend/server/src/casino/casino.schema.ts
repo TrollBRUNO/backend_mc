@@ -11,6 +11,9 @@ export class Casino {
   @Prop({ type: Map, of: String })
   address: Record<string, string>;
 
+  @Prop({ type: Map, of: String })
+  name: Record<string, string>;
+
   @Prop({ default: Date.now })
   create_date: Date;
 
@@ -25,6 +28,9 @@ export class Casino {
 
   @Prop({ type: [String], default: [] })
   uu_id_list: string[];
+
+  @Prop({ type: [String], default: [] })
+  photos: string[];
 }
 
 export const CasinoSchema = SchemaFactory.createForClass(Casino);

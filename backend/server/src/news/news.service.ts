@@ -39,10 +39,7 @@ export class NewsService {
           return null;
         }
 
-        this.pushService.send(u.fcm_token, {
-          title: 'Новая новость!',
-          body: 'В галерее появился новый пост.',
-        }).catch(() => {}),
+        this.pushService.sendLocalized(u.fcm_token, 'news', u.locale).catch(() => {}),
 
         u.last_new_notify = now; 
         u.save();

@@ -38,10 +38,7 @@ export class GalleryService {
           return null;
         }
         
-        this.pushService.send(u.fcm_token, {
-          title: 'Новый выигрыш!',
-          body: 'В галерее появился новый выигрыш.',
-        }).catch(() => {}),
+        this.pushService.sendLocalized(u.fcm_token, 'gallery', u.locale).catch(() => {}),
         
         u.last_gallery_notify = now; 
         u.save();

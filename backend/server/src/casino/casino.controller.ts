@@ -89,6 +89,8 @@ export class CasinoController {
       jackpot_url: body.jackpot_url,
       image_url: imageUrl,
       uu_id_list: body.uu_id_list,
+      name: body.name,
+      photos: body.photos,
     });
   }
 

@@ -158,7 +158,7 @@ export class AccountController {
   @Throttle({ global: { ttl: 60000, limit: 20 } })
   @Post('register')
   async register(@Body() dto: any) {
-    const { login, password, realname, cards, role } = dto;
+    const { login, password, realname, cards, role, locale } = dto;
 
     if (!login || !password || !realname) {
       throw new BadRequestException('MISSING_FIELDS');
@@ -169,7 +169,8 @@ export class AccountController {
       password,
       realname,
       cards,
-      role
+      role,
+      locale,
     });
   }
 
@@ -189,6 +190,7 @@ export class AccountController {
       last_credit_take_date: account.last_credit_take_date ?? null,
       role: account.role,
       image_url: account.image_url,
+      locale: account.locale ?? 'bg',
     };
   }
 
@@ -337,10 +339,7 @@ export class AccountController {
   async pushTest(@Req() req) {
     const acc = await this.accountService.findOne(req.user.sub);
 
-    await this.pushService.send(acc.fcm_token, {
-      title: 'Тестовое уведомление',
-      body: 'Пуш работает!',
-    });
+    await this.pushService.sendLocalized(acc.fcm_token, 'test', acc.locale);
 
     return { ok: true };
   }
@@ -350,5 +349,17 @@ export class AccountController {
   async saveFcmToken(@Req() req, @Body('token') token: string) {
     await this.accountService.updateFcmToken(req.user.sub, token);
     return { ok: true };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('locale')
+  async updateLocale(@Req() req, @Body('locale') locale: string) {
+    const normalized = locale?.toLowerCase();
+    if (!['bg', 'en', 'ru'].includes(normalized)) {
+      throw new BadRequestException('INVALID_LOCALE');
+    }
+
+    await this.accountService.update(req.user.sub, { locale: normalized });
+    return { ok: true, locale: normalized };
   }
 }

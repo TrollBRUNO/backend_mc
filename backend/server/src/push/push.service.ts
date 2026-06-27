@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import * as admin from 'firebase-admin'; 
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { getPushPayload, PushPayload, PushType } from './push-locales';
 
 @Injectable()
 export class PushService {
@@ -20,20 +21,35 @@ export class PushService {
     }
   }
 
-  async send(token: string, payload: { title: string; body: string }) {
+  async send(token: string, payload: { title: string; body: string } | PushPayload, locale?: string | null) {
     if (!token) return;
+
+    const resolvedPayload = this.resolvePayload(payload, locale);
 
     try {
       await admin.messaging().send({
         token,
         notification: {
-          title: payload.title,
-          body: payload.body,
+          title: resolvedPayload.title,
+          body: resolvedPayload.body,
         },
       });
     } catch (e) {
       console.warn('Push send failed:', e instanceof Error ? e.message : String(e));
     }
+  }
+
+  async sendLocalized(token: string, type: PushType, locale?: string | null) {
+    const payload = getPushPayload(type, locale);
+    await this.send(token, payload, locale);
+  }
+
+  private resolvePayload(payload: { title: string; body: string } | PushPayload, locale?: string | null) {
+    if ('title' in payload && 'body' in payload) {
+      return payload;
+    }
+
+    return getPushPayload(payload as PushType, locale);
   }
 }
 

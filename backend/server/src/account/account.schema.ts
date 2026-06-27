@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { Locale } from '../push/push-locales';
 
 export type AccountDocument = Account & Document;
 
@@ -34,6 +35,13 @@ export class Account {
 
   @Prop({ type: String, default: null })
   fcm_token: string;
+
+  @Prop({
+    type: String,
+    enum: Object.values(Locale),
+    default: Locale.BG,
+  })
+  locale: Locale;
 
   @Prop({
     type: [

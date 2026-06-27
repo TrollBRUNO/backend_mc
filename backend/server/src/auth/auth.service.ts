@@ -37,6 +37,11 @@ export class AuthService {
       throw new UnauthorizedException('INVALID_CREDENTIALS');
     }
 
+    if (dto.locale) {
+      account.locale = dto.locale as any;
+      await account.save();
+    }
+
     const payload = {
       sub: account._id.toString(),
       role: account.role ?? 'user',

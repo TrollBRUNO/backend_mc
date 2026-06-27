@@ -86,10 +86,7 @@ export class TasksService {
       );
       if (lastWheel && now.getTime() - lastWheel.getTime() < 24 * 60 * 60 * 1000) continue;
 
-      await this.pushService.send(acc.fcm_token, {
-        title: 'Колесо готово!',
-        body: 'Вы можете снова крутить колесо удачи.',
-      }).catch(() => {});
+      await this.pushService.sendLocalized(acc.fcm_token, 'wheel_ready', acc.locale).catch(() => {});
 
       await this.notificationLogService.log(accountId, NotificationLogType.WHEEL_READY);
       this.logger.log(`[wheel] notify sent to ${acc.login}`);
@@ -116,10 +113,7 @@ export class TasksService {
           const alreadySent = a.bonus_notified_12h &&
             (now.getTime() - a.bonus_notified_12h.getTime()) < 60 * 60 * 1000;
           if (!alreadySent) {
-            await this.pushService.send(a.fcm_token, {
-              title: 'Можно забрать бонус!',
-              body: 'Не забудьте забрать свой бонус.',
-            }).catch(() => {});
+            await this.pushService.sendLocalized(a.fcm_token, 'bonus_12h', a.locale).catch(() => {});
             await this.accountModel.updateOne({ _id: a._id }, { bonus_notified_12h: now });
             this.logger.log(`Bonus 12h notify sent to ${a.login}`);
           }
@@ -130,10 +124,7 @@ export class TasksService {
           const alreadySent = a.bonus_notified_1h &&
             (now.getTime() - a.bonus_notified_1h.getTime()) < 60 * 60 * 1000;
           if (!alreadySent) {
-            await this.pushService.send(a.fcm_token, {
-              title: 'Бонус скоро сгорит!',
-              body: 'У вас остался 1 час, чтобы забрать бонус.',
-            }).catch(() => {});
+            await this.pushService.sendLocalized(a.fcm_token, 'bonus_1h', a.locale).catch(() => {});
             await this.accountModel.updateOne({ _id: a._id }, { bonus_notified_1h: now });
             this.logger.log(`Bonus 1h notify sent to ${a.login}`);
           }
@@ -178,10 +169,7 @@ export class TasksService {
           tasks.push({
             type: NotificationLogType.JACKPOT_MINI,
             jackpotValue: result.mini,
-            promise: this.pushService.send(u.fcm_token, {
-              title: `Mini Jackpot растёт в зале ${casino.city.bg}!`,
-              body: `Сейчас: ${result.mini} EUR`,
-            }),
+            promise: this.pushService.sendLocalized(u.fcm_token, 'jackpot_mini', u.locale),
           });
         }
 
@@ -189,10 +177,7 @@ export class TasksService {
           tasks.push({
             type: NotificationLogType.JACKPOT_MIDDLE,
             jackpotValue: result.middle,
-            promise: this.pushService.send(u.fcm_token, {
-              title: `Middle Jackpot растёт в зале ${casino.city.bg}!`,
-              body: `Сейчас: ${result.middle} EUR`,
-            }),
+            promise: this.pushService.sendLocalized(u.fcm_token, 'jackpot_middle', u.locale),
           });
         }
 
@@ -200,10 +185,7 @@ export class TasksService {
           tasks.push({
             type: NotificationLogType.JACKPOT_MEGA,
             jackpotValue: result.mega,
-            promise: this.pushService.send(u.fcm_token, {
-              title: `Mega Jackpot растёт в зале ${casino.city.bg}!`,
-              body: `Сейчас: ${result.mega} EUR`,
-            }),
+            promise: this.pushService.sendLocalized(u.fcm_token, 'jackpot_mega', u.locale),
           });
         }
 
@@ -274,10 +256,7 @@ export class TasksService {
         continue;
       }
 
-      await this.pushService.send(u.fcm_token, {
-        title: 'Не забывайте!',
-        body: 'Загляните в казино — вас ждёт удача!',
-      }).catch(() => {});
+      await this.pushService.sendLocalized(u.fcm_token, 'nightly_reminder', u.locale).catch(() => {});
 
       await this.notificationLogService.log(accountId, NotificationLogType.NIGHTLY_REMINDER);
       this.logger.log(`[nightly] sent to ${u.login}`);

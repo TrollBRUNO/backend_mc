@@ -8,6 +8,7 @@ export class CreateAccountDto {
   readonly realname?: string;
   readonly google_id?: string;
   readonly apple_id?: string;
+  readonly locale?: string;
 
   readonly cards?: {
     card_id: string;
