@@ -31,6 +31,12 @@ export class Casino {
 
   @Prop({ type: [String], default: [] })
   photos: string[];
+
+  @Prop({ type: Number, default: null })
+  latitude: number | null;
+
+  @Prop({ type: Number, default: null })
+  longitude: number | null;
 }
 
 export const CasinoSchema = SchemaFactory.createForClass(Casino);

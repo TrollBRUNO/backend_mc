@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { ConfigService } from '@nestjs/config';
 import { Casino, CasinoDocument } from './casino.schema';
 import { CreateCasinoDto } from './dto/create-casino.dto';
 import { UpdateCasinoDto } from './dto/update-casino.dto';
@@ -9,6 +10,7 @@ import { UpdateCasinoDto } from './dto/update-casino.dto';
 export class CasinoService {
   constructor(
     @InjectModel(Casino.name) private casinoModel: Model<CasinoDocument>,
+    private readonly configService: ConfigService,
   ) {}
 
   /* async getCities(): Promise<Record<string, string>> {
@@ -84,6 +86,49 @@ export class CasinoService {
         details: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+
+  async geocode(ids: string[]): Promise<{ updated: number; errors: string[] }> {
+    const apiKey = this.configService.get<string>('GOOGLE_MAPS_API_KEY');
+    if (!apiKey) throw new Error('GOOGLE_MAPS_API_KEY not configured');
+
+    const casinos = ids.length > 0
+      ? await this.casinoModel.find({ _id: { $in: ids } }).exec()
+      : await this.casinoModel.find().exec();
+
+    let updated = 0;
+    const errors: string[] = [];
+
+    for (const casino of casinos) {
+      const addressStr =
+        casino.address?.['en'] ??
+        casino.address?.['bg'] ??
+        Object.values(casino.address ?? {})[0];
+
+      if (!addressStr) {
+        errors.push(`${casino._id}: no address`);
+        continue;
+      }
+
+      try {
+        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addressStr)}&key=${apiKey}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (data.status !== 'OK' || !data.results?.[0]) {
+          errors.push(`${casino._id}: ${data.status}`);
+          continue;
+        }
+
+        const { lat, lng } = data.results[0].geometry.location;
+        await this.casinoModel.findByIdAndUpdate(casino._id, { latitude: lat, longitude: lng });
+        updated++;
+      } catch (err) {
+        errors.push(`${casino._id}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    return { updated, errors };
   }
 
   async getJackpotValuesForCasino(casino: CasinoDocument) {

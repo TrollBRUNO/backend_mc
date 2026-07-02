@@ -91,6 +91,8 @@ export class CasinoController {
       uu_id_list: body.uu_id_list,
       name: body.name,
       photos: body.photos,
+      latitude: body.latitude != null ? parseFloat(body.latitude) : null,
+      longitude: body.longitude != null ? parseFloat(body.longitude) : null,
     });
   }
 
@@ -158,6 +160,8 @@ export class CasinoController {
     return this.casinoService.update(id, {
       ...body,
       ...(imageUrl ? { image_url: imageUrl } : {}),
+      ...(body.latitude != null ? { latitude: parseFloat(body.latitude) } : {}),
+      ...(body.longitude != null ? { longitude: parseFloat(body.longitude) } : {}),
     });
   }
 
@@ -166,5 +170,12 @@ export class CasinoController {
   @Delete(':id')
   delete(@Param('id') id: string) {
     return this.casinoService.delete(id);
+  }
+
+  // ---------- GEOCODE ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Post('geocode')
+  async geocode(@Body('ids') ids: string[] = []) {
+    return this.casinoService.geocode(ids);
   }
 }

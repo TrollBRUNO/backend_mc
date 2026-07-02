@@ -7,4 +7,6 @@ export class CreateCasinoDto {
   readonly image_url: string;
   readonly uu_id_list: string[];
   readonly photos?: string[];
+  readonly latitude?: number | null;
+  readonly longitude?: number | null;
 }
