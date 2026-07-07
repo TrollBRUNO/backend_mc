@@ -56,6 +56,32 @@ export class TasksService {
     }
   }
 
+  // Каждую минуту — active не редактируется вручную, а прослушивается:
+  // становится true, как только наступает start, и обратно false, если
+  // start отредактировали на будущее
+  @Cron('* * * * *')
+  async updateCasinoEventsActiveState() {
+    const now = new Date();
+
+    const activated = await this.casinoModel.updateMany(
+      { 'events.start': { $lte: now }, 'events.active': { $ne: true } },
+      { $set: { 'events.$[e].active': true } },
+      { arrayFilters: [{ 'e.start': { $lte: now }, 'e.active': { $ne: true } }] },
+    );
+
+    const deactivated = await this.casinoModel.updateMany(
+      { 'events.start': { $gt: now }, 'events.active': { $ne: false } },
+      { $set: { 'events.$[e].active': false } },
+      { arrayFilters: [{ 'e.start': { $gt: now }, 'e.active': { $ne: false } }] },
+    );
+
+    if (activated.modifiedCount > 0 || deactivated.modifiedCount > 0) {
+      this.logger.log(
+        `[events] activated ${activated.modifiedCount}, deactivated ${deactivated.modifiedCount} casino doc(s)`,
+      );
+    }
+  }
+
   // Каждую минуту
   @Cron('* * * * *')
   async wheelReadyNotify() {

@@ -33,6 +33,7 @@ export class Casino {
         description: String,
         start: Date,
         end: Date,
+        active: { type: Boolean, default: false },
       },
     ],
     default: [],
@@ -42,6 +43,7 @@ export class Casino {
     description: string;
     start: Date;
     end: Date;
+    active: boolean;
   }[];
 
   @Prop({ type: [String], default: [] })

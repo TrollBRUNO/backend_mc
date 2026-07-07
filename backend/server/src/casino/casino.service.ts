@@ -60,7 +60,7 @@ export class CasinoService {
   async create(dto: CreateCasinoDto): Promise<Casino> {
     const casino = new this.casinoModel({
       ...dto,
-      ...(dto.events ? { events: this.withEndOfDay(dto.events) } : {}),
+      ...(dto.events ? { events: this.normalizeEvents(dto.events) } : {}),
     });
     return casino.save();
   }
@@ -68,7 +68,7 @@ export class CasinoService {
   async update(id: string, dto: UpdateCasinoDto): Promise<Casino> {
     const updated = await this.casinoModel.findByIdAndUpdate(
       id,
-      { ...dto, ...(dto.events ? { events: this.withEndOfDay(dto.events) } : {}) },
+      { ...dto, ...(dto.events ? { events: this.normalizeEvents(dto.events) } : {}) },
       { new: true },
     ).exec();
     if (!updated) throw new NotFoundException(`Casino ${id} not found`);
@@ -76,14 +76,24 @@ export class CasinoService {
   }
 
   // Событие действует весь день end целиком, поэтому время всегда
-  // выравнивается на 23:59:59.999 по серверному времени, что бы ни прислал клиент
-  private withEndOfDay(
+  // выравнивается на 23:59:59.999 по серверному времени, что бы ни прислал клиент.
+  // active не редактируется клиентом — всегда пересчитывается сервером
+  // из start (дальше её держит в актуальном состоянии крон в TasksService)
+  private normalizeEvents(
     events: { name: string; description: string; start: Date; end: Date }[],
-  ): { name: string; description: string; start: Date; end: Date }[] {
+  ): { name: string; description: string; start: Date; end: Date; active: boolean }[] {
+    const now = new Date();
     return events.map(e => {
+      const start = new Date(e.start);
       const end = new Date(e.end);
       end.setHours(23, 59, 59, 999);
-      return { ...e, end };
+      return {
+        name: e.name,
+        description: e.description,
+        start,
+        end,
+        active: start <= now,
+      };
     });
   }
 
