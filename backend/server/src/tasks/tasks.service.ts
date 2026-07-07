@@ -5,23 +5,9 @@ import { Model, Types } from 'mongoose';
 import { Account, AccountDocument } from '../account/account.schema';
 import { Casino, CasinoDocument } from '../casino/casino.schema';
 import { PushService } from '../push/push.service';
-import { CasinoService } from '../casino/casino.service';
+import { CasinoService, JackpotResult } from '../casino/casino.service';
 import { NotificationLogService } from '../notification-log/notification-log.service';
 import { NotificationLogType } from '../notification-log/notification-log.schema';
-
-interface JackpotValues {
-  mini: number;
-  middle: number;
-  mega: number;
-}
-
-interface JackpotError {
-  error: true;
-  message: string;
-  details: string;
-}
-
-type JackpotResult = JackpotValues | JackpotError;
 
 @Injectable()
 export class TasksService {
@@ -52,6 +38,21 @@ export class TasksService {
       acc.bonus_notified_1h = null;
       await acc.save();
       this.logger.log(`Bonus reset for ${acc.login}`);
+    }
+  }
+
+  // Каждую минуту
+  @Cron('* * * * *')
+  async removeExpiredCasinoEvents() {
+    const now = new Date();
+
+    const result = await this.casinoModel.updateMany(
+      { 'events.end': { $lt: now } },
+      { $pull: { events: { end: { $lt: now } } } },
+    );
+
+    if (result.modifiedCount > 0) {
+      this.logger.log(`[events] removed expired events from ${result.modifiedCount} casino(s)`);
     }
   }
 
@@ -154,56 +155,59 @@ export class TasksService {
       const accountId = u._id as unknown as Types.ObjectId;
 
       for (const casino of casinos) {
-        const result: JackpotResult = await this.casinoService.getJackpotValuesForCasino(casino);
-        if ('error' in result) continue;
+        const results: JackpotResult[] = await this.casinoService.getJackpotValuesForCasino(casino);
 
-        type JackpotTask = {
-          type: NotificationLogType;
-          jackpotValue: number;
-          promise: Promise<void>;
-        };
+        for (const result of results) {
+          if ('error' in result) continue;
 
-        const tasks: JackpotTask[] = [];
+          type JackpotTask = {
+            type: NotificationLogType;
+            jackpotValue: number;
+            promise: Promise<void>;
+          };
 
-        if (result.mini >= thresholds.mini) {
-          tasks.push({
-            type: NotificationLogType.JACKPOT_MINI,
-            jackpotValue: result.mini,
-            promise: this.pushService.sendLocalized(u.fcm_token, 'jackpot_mini', u.locale),
-          });
-        }
+          const tasks: JackpotTask[] = [];
 
-        if (result.middle >= thresholds.middle) {
-          tasks.push({
-            type: NotificationLogType.JACKPOT_MIDDLE,
-            jackpotValue: result.middle,
-            promise: this.pushService.sendLocalized(u.fcm_token, 'jackpot_middle', u.locale),
-          });
-        }
-
-        if (result.mega >= thresholds.mega) {
-          tasks.push({
-            type: NotificationLogType.JACKPOT_MEGA,
-            jackpotValue: result.mega,
-            promise: this.pushService.sendLocalized(u.fcm_token, 'jackpot_mega', u.locale),
-          });
-        }
-
-        if (tasks.length === 0) continue;
-
-        const results = await Promise.allSettled(tasks.map(t => t.promise));
-
-        for (let i = 0; i < results.length; i++) {
-          const settled = results[i];
-          const task = tasks[i];
-          if (settled.status === 'fulfilled') {
-            await this.notificationLogService.log(accountId, task.type, {
-              casino_id: (casino._id as any).toString(),
-              jackpot_value: task.jackpotValue,
+          if (result.mini >= thresholds.mini) {
+            tasks.push({
+              type: NotificationLogType.JACKPOT_MINI,
+              jackpotValue: result.mini,
+              promise: this.pushService.sendLocalized(u.fcm_token, 'jackpot_mini', u.locale),
             });
-            this.logger.log(`[jackpot] ${task.type} sent to ${u.login} (${casino.city.bg})`);
-          } else {
-            this.logger.error(`[jackpot] ${task.type} failed for ${u.login}: ${settled.reason}`);
+          }
+
+          if (result.middle >= thresholds.middle) {
+            tasks.push({
+              type: NotificationLogType.JACKPOT_MIDDLE,
+              jackpotValue: result.middle,
+              promise: this.pushService.sendLocalized(u.fcm_token, 'jackpot_middle', u.locale),
+            });
+          }
+
+          if (result.mega >= thresholds.mega) {
+            tasks.push({
+              type: NotificationLogType.JACKPOT_MEGA,
+              jackpotValue: result.mega,
+              promise: this.pushService.sendLocalized(u.fcm_token, 'jackpot_mega', u.locale),
+            });
+          }
+
+          if (tasks.length === 0) continue;
+
+          const settledResults = await Promise.allSettled(tasks.map(t => t.promise));
+
+          for (let i = 0; i < settledResults.length; i++) {
+            const settled = settledResults[i];
+            const task = tasks[i];
+            if (settled.status === 'fulfilled') {
+              await this.notificationLogService.log(accountId, task.type, {
+                casino_id: (casino._id as any).toString(),
+                jackpot_value: task.jackpotValue,
+              });
+              this.logger.log(`[jackpot] ${task.type} sent to ${u.login} (${casino.city.bg})`);
+            } else {
+              this.logger.error(`[jackpot] ${task.type} failed for ${u.login}: ${settled.reason}`);
+            }
           }
         }
       }

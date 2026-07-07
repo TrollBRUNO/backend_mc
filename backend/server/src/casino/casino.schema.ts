@@ -20,11 +20,29 @@ export class Casino {
   @Prop({ default: true})
   mystery_progressive: boolean;
 
-  @Prop()
-  jackpot_url: string;
+  @Prop({ type: [String], default: [] })
+  jackpot_url: string[];
 
   @Prop()
   image_url: string;
+
+  @Prop({
+    type: [
+      {
+        name: String,
+        description: String,
+        start: Date,
+        end: Date,
+      },
+    ],
+    default: [],
+  })
+  events: {
+    name: string;
+    description: string;
+    start: Date;
+    end: Date;
+  }[];
 
   @Prop({ type: [String], default: [] })
   uu_id_list: string[];

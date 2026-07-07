@@ -6,6 +6,20 @@ import { Casino, CasinoDocument } from './casino.schema';
 import { CreateCasinoDto } from './dto/create-casino.dto';
 import { UpdateCasinoDto } from './dto/update-casino.dto';
 
+export interface JackpotValues {
+  mini: number;
+  middle: number;
+  mega: number;
+}
+
+export interface JackpotError {
+  error: true;
+  message: string;
+  details: string;
+}
+
+export type JackpotResult = JackpotValues | JackpotError;
+
 @Injectable()
 export class CasinoService {
   constructor(
@@ -44,49 +58,40 @@ export class CasinoService {
   }  
 
   async create(dto: CreateCasinoDto): Promise<Casino> {
-    const casino = new this.casinoModel(dto);
+    const casino = new this.casinoModel({
+      ...dto,
+      ...(dto.events ? { events: this.withEndOfDay(dto.events) } : {}),
+    });
     return casino.save();
-  } 
+  }
 
   async update(id: string, dto: UpdateCasinoDto): Promise<Casino> {
-    const updated = await this.casinoModel.findByIdAndUpdate(id, dto, { new: true }).exec();
+    const updated = await this.casinoModel.findByIdAndUpdate(
+      id,
+      { ...dto, ...(dto.events ? { events: this.withEndOfDay(dto.events) } : {}) },
+      { new: true },
+    ).exec();
     if (!updated) throw new NotFoundException(`Casino ${id} not found`);
     return updated;
-  }   
+  }
+
+  // Событие действует весь день end целиком, поэтому время всегда
+  // выравнивается на 23:59:59.999 по серверному времени, что бы ни прислал клиент
+  private withEndOfDay(
+    events: { name: string; start: Date; end: Date }[],
+  ): { name: string; start: Date; end: Date }[] {
+    return events.map(e => {
+      const end = new Date(e.end);
+      end.setHours(23, 59, 59, 999);
+      return { ...e, end };
+    });
+  }
 
   async delete(id: string): Promise<Casino> {
     const deleted = await this.casinoModel.findByIdAndDelete(id).exec();
     if (!deleted) throw new NotFoundException(`Casino ${id} not found`);
     return deleted;
   }   
-
-  // Получить текущие значения джекпотов с внешнего сервера
-  async getJackpotValues(id: string) {
-    const casino = await this.findOne(id);
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
-    try {
-      const response = await fetch(casino.jackpot_url, {
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeout);
-
-      if (!response.ok) {
-        throw new Error(`Jackpot server responded with ${response.status}`);
-      }
-
-      return await response.json(); // { mini: 123, middle: 456, mega: 789 }
-    } catch (error) {
-      return {
-        error: true,
-        message: 'Failed to load jackpot data',
-        details: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
 
   async geocode(ids: string[]): Promise<{ updated: number; errors: string[] }> {
     const apiKey = this.configService.get<string>('GOOGLE_MAPS_API_KEY');
@@ -131,12 +136,19 @@ export class CasinoService {
     return { updated, errors };
   }
 
-  async getJackpotValuesForCasino(casino: CasinoDocument) {
+  // Получить текущие значения джекпотов со всех внешних серверов казино
+  async getJackpotValuesForCasino(casino: Casino): Promise<JackpotResult[]> {
+    return Promise.all(
+      (casino.jackpot_url ?? []).map(url => this.fetchJackpotValues(url)),
+    );
+  }
+
+  private async fetchJackpotValues(url: string): Promise<JackpotResult> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
 
     try {
-      const response = await fetch(casino.jackpot_url, {
+      const response = await fetch(url, {
         signal: controller.signal,
       });
 
@@ -148,6 +160,7 @@ export class CasinoService {
 
       return await response.json(); // { mini, middle, mega }
     } catch (error) {
+      clearTimeout(timeout);
       return {
         error: true,
         message: 'Failed to load jackpot data',
