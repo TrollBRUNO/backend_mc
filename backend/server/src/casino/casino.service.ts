@@ -78,8 +78,8 @@ export class CasinoService {
   // Событие действует весь день end целиком, поэтому время всегда
   // выравнивается на 23:59:59.999 по серверному времени, что бы ни прислал клиент
   private withEndOfDay(
-    events: { name: string; start: Date; end: Date }[],
-  ): { name: string; start: Date; end: Date }[] {
+    events: { name: string; description: string; start: Date; end: Date }[],
+  ): { name: string; description: string; start: Date; end: Date }[] {
     return events.map(e => {
       const end = new Date(e.end);
       end.setHours(23, 59, 59, 999);
