@@ -21,6 +21,7 @@ import { Patch, Req, UseGuards } from '@nestjs/common/decorators';
 import { BindCardDto } from './dto/create-card.dto';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { PushService } from '../push/push.service';
+import { Locale } from '../push/push-locales';
 import { Throttle } from '@nestjs/throttler';
 
 @Controller('account')
@@ -355,7 +356,7 @@ export class AccountController {
   @Post('locale')
   async updateLocale(@Req() req, @Body('locale') locale: string) {
     const normalized = locale?.toLowerCase();
-    if (!['bg', 'en', 'ru'].includes(normalized)) {
+    if (!(Object.values(Locale) as string[]).includes(normalized)) {
       throw new BadRequestException('INVALID_LOCALE');
     }
 

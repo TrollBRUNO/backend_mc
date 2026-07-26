@@ -80,21 +80,39 @@ export class CasinoService {
   // active не редактируется клиентом — всегда пересчитывается сервером
   // из start (дальше её держит в актуальном состоянии крон в TasksService)
   private normalizeEvents(
-    events: { name: string; description: string; start: Date; end: Date }[],
-  ): { name: string; description: string; start: Date; end: Date; active: boolean }[] {
+    events: {
+      name: Record<string, string> | string;
+      description: Record<string, string> | string;
+      start: Date;
+      end: Date;
+    }[],
+  ): {
+    name: Record<string, string>;
+    description: Record<string, string>;
+    start: Date;
+    end: Date;
+    active: boolean;
+  }[] {
     const now = new Date();
     return events.map(e => {
       const start = new Date(e.start);
       const end = new Date(e.end);
       end.setHours(23, 59, 59, 999);
       return {
-        name: e.name,
-        description: e.description,
+        name: this.normalizeLocalizedField(e.name),
+        description: this.normalizeLocalizedField(e.description),
         start,
         end,
         active: start <= now,
       };
     });
+  }
+
+  // Старые клиенты присылают name/description событий обычной строкой —
+  // дублируем её во все локали, чтобы приложение всегда нашло свой язык
+  private normalizeLocalizedField(value: Record<string, string> | string): Record<string, string> {
+    if (typeof value !== 'string') return value ?? {};
+    return { bg: value, el: value, en: value, ru: value, tr: value };
   }
 
   async delete(id: string): Promise<Casino> {

@@ -29,8 +29,8 @@ export class Casino {
   @Prop({
     type: [
       {
-        name: String,
-        description: String,
+        name: { type: Map, of: String },
+        description: { type: Map, of: String },
         start: Date,
         end: Date,
         active: { type: Boolean, default: false },
@@ -39,8 +39,8 @@ export class Casino {
     default: [],
   })
   events: {
-    name: string;
-    description: string;
+    name: Record<string, string>;
+    description: Record<string, string>;
     start: Date;
     end: Date;
     active: boolean;

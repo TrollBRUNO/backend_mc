@@ -9,5 +9,10 @@ export class CreateCasinoDto {
   readonly photos?: string[];
   readonly latitude?: number | null;
   readonly longitude?: number | null;
-  readonly events?: { name: string; description: string; start: Date; end: Date }[];
+  readonly events?: {
+    name: Record<string, string> | string;
+    description: Record<string, string> | string;
+    start: Date;
+    end: Date;
+  }[];
 }
