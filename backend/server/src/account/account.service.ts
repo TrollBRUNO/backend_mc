@@ -4,6 +4,7 @@ import mongoose, { Model, Types } from 'mongoose';
 import { Account, AccountDocument } from './account.schema';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
+import { AccountRole } from '../auth/roles';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -63,7 +64,8 @@ export class AccountService {
       city: string;
       active: boolean;
     }[];
-    role: string;
+    // role из тела запроса игнорируется, см. ниже
+    role?: string;
     locale?: string;
   }) {
     // 1️⃣ username уникален
@@ -90,7 +92,12 @@ export class AccountService {
       password: hash,
       realname: dto.realname,
       cards: dto.cards ?? [],
-      role: dto.role,
+      // Публичная регистрация всегда создаёт обычного пользователя.
+      // Роль из тела запроса не берём: иначе кто угодно мог бы прислать
+      // role: 'admin' или 'croupier' и выдать себе права.
+      // Админа заводит владелец проекта прямо в базе, крупье — админ
+      // через POST /croupiers.
+      role: AccountRole.USER,
       locale: dto.locale ?? 'bg',
     });
 

@@ -16,6 +16,8 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { PushModule } from './push/push.module';
 import { TasksModule } from './tasks/tasks.module';
 import { NotificationLogModule } from './notification-log/notification-log.module';
+import { ActivityLogModule } from './activity-log/activity-log.module';
+import { CroupierModule } from './croupier/croupier.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 
@@ -27,6 +29,7 @@ import { APP_GUARD } from '@nestjs/core';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    ActivityLogModule,
     NewsModule,
     GalleryModule,
     CasinoModule,
@@ -40,6 +43,7 @@ import { APP_GUARD } from '@nestjs/core';
     PushModule,
     TasksModule,
     NotificationLogModule,
+    CroupierModule,
     ThrottlerModule.forRoot([
       { name: 'global', ttl: 60000, limit: 400 },
     ]),

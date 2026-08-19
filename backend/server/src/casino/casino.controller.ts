@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Req,
   UseInterceptors,
   UploadedFile,
   UseGuards,
@@ -18,6 +19,10 @@ import * as path from 'path';
 import { v4 as uuid } from 'uuid';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { AccountRole } from '../auth/roles';
+import { CasinoEventDto, UpdateCasinoEventDto } from './dto/casino-event.dto';
 
 @Controller('casino')
 export class CasinoController {
@@ -36,7 +41,8 @@ export class CasinoController {
   }
 
   // ---------- GET ONE ----------
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.ADMIN, AccountRole.CROUPIER)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.casinoService.findOne(id);
@@ -60,7 +66,7 @@ export class CasinoController {
     const imageUrl = `/uploads/${file.filename}`;
     return { image_url: imageUrl };
   }
-  
+
   // ---------- CREATE (multipart/form-data для файла) ----------
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Post()
@@ -75,7 +81,7 @@ export class CasinoController {
       }),
     }),
   )
-  async create(@UploadedFile() file: any, @Body() body: any) {
+  async create(@Req() req, @UploadedFile() file: any, @Body() body: any) {
     const imageUrl = file
       ? `/uploads/${file.filename}`
       : body.image_url
@@ -93,7 +99,8 @@ export class CasinoController {
       photos: body.photos,
       latitude: body.latitude != null ? parseFloat(body.latitude) : null,
       longitude: body.longitude != null ? parseFloat(body.longitude) : null,
-    });
+      events: body.events,
+    }, req.user);
   }
 
     // ---------- Брать джекпоты по списку URL ----------
@@ -106,9 +113,50 @@ export class CasinoController {
   // ---------- CREATE через JSON (уже загруженные файлы) ----------
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Post('json')
-  async createJson(@Body() body: any) {
+  async createJson(@Req() req, @Body() body: any) {
     const imageUrl = body.image_url ? `/uploads/${body.image_url}` : `/uploads/logo_magic_city5.png`;
-    return this.casinoService.create({ ...body, image_url: imageUrl });
+    return this.casinoService.create({ ...body, image_url: imageUrl }, req.user);
+  }
+
+  // ---------- МЕРОПРИЯТИЯ ЗАЛА ----------
+  // Точечные ручки, чтобы крупье правил только события своего зала
+  // и не трогал остальные поля казино (адрес, джекпоты, фото)
+
+  // ---------- EVENTS: LIST ----------
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.ADMIN, AccountRole.CROUPIER)
+  @Get(':id/events')
+  findEvents(@Param('id') id: string) {
+    return this.casinoService.findEvents(id);
+  }
+
+  // ---------- EVENTS: CREATE ----------
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.ADMIN, AccountRole.CROUPIER)
+  @Post(':id/events')
+  addEvent(@Req() req, @Param('id') id: string, @Body() body: CasinoEventDto) {
+    return this.casinoService.addEvent(id, body, req.user);
+  }
+
+  // ---------- EVENTS: UPDATE ----------
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.ADMIN, AccountRole.CROUPIER)
+  @Put(':id/events/:eventId')
+  updateEvent(
+    @Req() req,
+    @Param('id') id: string,
+    @Param('eventId') eventId: string,
+    @Body() body: UpdateCasinoEventDto,
+  ) {
+    return this.casinoService.updateEvent(id, eventId, body, req.user);
+  }
+
+  // ---------- EVENTS: DELETE ----------
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.ADMIN, AccountRole.CROUPIER)
+  @Delete(':id/events/:eventId')
+  deleteEvent(@Req() req, @Param('id') id: string, @Param('eventId') eventId: string) {
+    return this.casinoService.deleteEvent(id, eventId, req.user);
   }
 
   // ---------- UPDATE ----------
@@ -126,6 +174,7 @@ export class CasinoController {
     }),
   )
   async update(
+    @Req() req,
     @Param('id') id: string,
     @UploadedFile() file: any,
     @Body() body: any,
@@ -141,7 +190,7 @@ export class CasinoController {
       ...(imageUrl ? { image_url: imageUrl } : {}),
       ...(body.latitude != null ? { latitude: parseFloat(body.latitude) } : {}),
       ...(body.longitude != null ? { longitude: parseFloat(body.longitude) } : {}),
-    });
+    }, req.user);
   }
 
   // ---------- DELETE ----------

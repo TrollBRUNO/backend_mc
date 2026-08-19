@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import { Locale } from '../push/push-locales';
+import { AccountRole } from '../auth/roles';
 
 export type AccountDocument = Account & Document;
 
@@ -24,8 +25,19 @@ export class Account {
   @Prop()
   realname: string;
 
-  @Prop({ type: String, default: 'user' }) 
+  @Prop({ type: String, default: AccountRole.USER, index: true })
   role: string;
+
+  // Залы, к которым подключён крупье (role === 'croupier').
+  // У обычных пользователей и админов пустой — админу доступны все казино.
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'Casino' }], default: [] })
+  casino_ids: Types.ObjectId[];
+
+  // Денормализованная дата последнего действия в админке (создание/правка/удаление
+  // новости, выигрыша, мероприятия). Пишется вместе с записью в activity_logs,
+  // нужна для быстрой сортировки списка крупье по активности.
+  @Prop({ type: Date, default: null })
+  last_activity_at: Date | null;
 
   @Prop({ type: String, default: null, sparse: true})
   google_id: string | null;

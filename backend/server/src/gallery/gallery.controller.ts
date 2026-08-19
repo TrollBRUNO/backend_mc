@@ -6,6 +6,8 @@ import {
   Delete,
   Body,
   Param,
+  Query,
+  Req,
   UseInterceptors,
   UploadedFile,
   UseGuards,
@@ -16,28 +18,39 @@ import { diskStorage } from 'multer';
 import { GalleryService } from './gallery.service';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
-import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { AccountRole } from '../auth/roles';
 
+// Выигрыши ведут админ и крупье. Крупье правит и удаляет только свои —
+// это проверяет GalleryService через AuthorshipService.
 @Controller('gallery')
 export class GalleryController {
   constructor(private readonly galleryService: GalleryService) {}
 
   // ---------- GET ALL ----------
+  // Приложение зовёт без параметров, админка может фильтровать
+  // по казино (?casino_id=) и по автору (?created_by=)
   @Get()
-  findAll() {
-    return this.galleryService.findAll();
+  findAll(
+    @Query('casino_id') casinoId?: string,
+    @Query('created_by') createdBy?: string,
+  ) {
+    return this.galleryService.findAll({ casino_id: casinoId, created_by: createdBy });
   }
 
   // ---------- GET ONE ----------
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.ADMIN, AccountRole.CROUPIER)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.galleryService.findOne(id);
   }
 
   // ---------- UPLOAD IMAGE ----------
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.ADMIN, AccountRole.CROUPIER)
   @Post('upload')
   @UseInterceptors(
     FileInterceptor('image', {
@@ -54,9 +67,10 @@ export class GalleryController {
     const imageUrl = `/uploads/${file.filename}`;
     return { image_url: imageUrl };
   }
-  
+
   // ---------- CREATE (multipart/form-data для файла) ----------
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.ADMIN, AccountRole.CROUPIER)
   @Post()
   @UseInterceptors(
     FileInterceptor('image', {
@@ -69,29 +83,35 @@ export class GalleryController {
       }),
     }),
   )
-  async create(@UploadedFile() file: any, @Body() body: any) {
+  async create(@Req() req, @UploadedFile() file: any, @Body() body: any) {
     const imageUrl = file
       ? `/uploads/${file.filename}`
       : body.image_url
       ? `/uploads/${body.image_url}`
       : `/uploads/logo_magic_city5.png`; // дефолт
 
-    return this.galleryService.create({
-      description: body.description,
-      image_url: imageUrl,
-    });
+    return this.galleryService.create(
+      {
+        description: body.description,
+        image_url: imageUrl,
+        casino_id: body.casino_id,
+      },
+      req.user,
+    );
   }
 
   // ---------- CREATE через JSON (уже загруженные файлы) ----------
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.ADMIN, AccountRole.CROUPIER)
   @Post('json')
-  async createJson(@Body() body: any) {
+  async createJson(@Req() req, @Body() body: any) {
     const imageUrl = body.image_url ? `/uploads/${body.image_url}` : `/uploads/logo_magic_city5.png`;
-    return this.galleryService.create({ ...body, image_url: imageUrl });
+    return this.galleryService.create({ ...body, image_url: imageUrl }, req.user);
   }
 
   // ---------- UPDATE ----------
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.ADMIN, AccountRole.CROUPIER)
   @Put(':id')
   @UseInterceptors(
     FileInterceptor('image', {
@@ -105,6 +125,7 @@ export class GalleryController {
     }),
   )
   async update(
+    @Req() req,
     @Param('id') id: string,
     @UploadedFile() file: any,
     @Body() body: any,
@@ -115,16 +136,21 @@ export class GalleryController {
       ? `/uploads/${body.image_url}`
       : undefined;
 
-    return this.galleryService.update(id, {
-      ...body,
-      ...(imageUrl ? { image_url: imageUrl } : {}),
-    });
+    return this.galleryService.update(
+      id,
+      {
+        ...body,
+        ...(imageUrl ? { image_url: imageUrl } : {}),
+      },
+      req.user,
+    );
   }
 
   // ---------- DELETE ----------
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(AccountRole.ADMIN, AccountRole.CROUPIER)
   @Delete(':id')
-  delete(@Param('id') id: string) {
-    return this.galleryService.delete(id);
+  delete(@Req() req, @Param('id') id: string) {
+    return this.galleryService.delete(id, req.user);
   }
 }
