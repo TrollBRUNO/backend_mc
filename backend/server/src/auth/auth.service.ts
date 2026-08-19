@@ -1,4 +1,5 @@
 import {
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -35,6 +36,11 @@ export class AuthService {
     const passwordOk = await bcrypt.compare(dto.password, account.password);
     if (!passwordOk) {
       throw new UnauthorizedException('INVALID_CREDENTIALS');
+    }
+
+    // Заблокированному аккаунту токены не выдаём вовсе
+    if (account.is_blocked) {
+      throw new ForbiddenException('ACCOUNT_BLOCKED');
     }
 
     if (dto.locale) {
@@ -90,14 +96,24 @@ export class AuthService {
         throw new UnauthorizedException('REFRESH_EXPIRED');
       }
 
+      // Аккаунт мог быть заблокирован, разжалован или ему сбросили пароль
+      // уже после выдачи refresh-токена — перечитываем состояние из базы
+      const account = await this.accountModel.findById(payload.sub);
+      if (!account || account.is_blocked) {
+        throw new UnauthorizedException('INVALID_REFRESH_TOKEN');
+      }
+      if ((account.token_version ?? 0) !== (payload.token_version ?? 0)) {
+        throw new UnauthorizedException('TOKEN_REVOKED');
+      }
+
       // 🔁 ROTATION
       session.revoked = true;
       await session.save();
 
       const newPayload = {
         sub: payload.sub,
-        role: payload.role,
-        token_version: payload.token_version,
+        role: account.role ?? 'user',
+        token_version: account.token_version ?? 0,
       };
 
       const newAccessToken = this.jwtService.sign(newPayload, {

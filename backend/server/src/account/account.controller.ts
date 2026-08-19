@@ -34,10 +34,12 @@ export class AccountController {
   // ----------------------------------------------------------
   // 1) generateBonusCode
   // ----------------------------------------------------------
+  // accountId берётся из токена, а не из URL: по :id любой залогиненный
+  // мог сгенерировать бонус-код на чужой аккаунт
   @UseGuards(JwtAuthGuard)
   @Post(':id/generate-bonus')
-  async generateBonusCode(@Param('id') accountId: string) {
-    const code = await this.accountService.generateBonusCode(accountId);
+  async generateBonusCode(@Req() req) {
+    const code = await this.accountService.generateBonusCode(req.user.sub);
     return { success: true, bonus_code: code };
   }
 
@@ -47,13 +49,13 @@ export class AccountController {
   @UseGuards(JwtAuthGuard)
   @Post(':id/verify-bonus')
   async verifyBonusCode(
-    @Param('id') accountId: string,
+    @Req() req,
     @Body('card_id') card_id: string,
     @Body('code') code: string,
   ) {
     if (!card_id || !code) throw new BadRequestException('card_id and code are required');
 
-    return await this.accountService.verifyBonusCode(accountId, card_id, code);
+    return await this.accountService.verifyBonusCode(req.user.sub, card_id, code);
   }
 
 
@@ -77,6 +79,9 @@ export class AccountController {
   // ----------------------------------------------------------
   // 4) listCards
   // ----------------------------------------------------------
+  // Отдаёт карты произвольного аккаунта — только админу.
+  // Пользователь свои карты берёт через /account/get-profile-cards
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Get(':id/cards')
   async listCards(@Param('id') accountId: string) {
     const cards = await this.accountService.listCards(accountId);
@@ -204,6 +209,9 @@ export class AccountController {
   }
 
   // ---------- CREATE (multipart/form-data для файла) ----------
+  // Заведение аккаунта руками — только админ. Обычные пользователи
+  // приходят через /account/register
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Post()
   @UseInterceptors(
     FileInterceptor('image', {
@@ -237,6 +245,7 @@ export class AccountController {
   }
 
   // ---------- CREATE через JSON (уже загруженные файлы) ----------
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Post('json')
   async createJson(@Body() body: any) {
     const imageUrl = body.image_url ? `/uploads/${body.image_url}` : `/uploads/logo_magic_city5.png`;
@@ -252,7 +261,10 @@ export class AccountController {
   }
 
   // ---------- UPDATE ----------
-  @UseGuards(JwtAuthGuard)
+  // Только админ: раньше стоял один JwtAuthGuard, и любой залогиненный
+  // мог обновить любой аккаунт, включая собственную роль.
+  // Набор изменяемых полей ограничен в AccountService.update
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Put(':id')
   @UseInterceptors(
     FileInterceptor('image', {
@@ -283,6 +295,9 @@ export class AccountController {
   }
 
   // ---------- DELETE ----------
+  // Раньше стояла вообще без guard — удалить любой аккаунт мог кто угодно
+  // без единого токена
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Delete(':id')
   delete(@Param('id') id: string) {
     return this.accountService.delete(id);

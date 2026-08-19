@@ -25,5 +25,10 @@ export class CreateAccountDto {
 
   readonly image_url?: string;
 
+  readonly is_blocked?: boolean;
+  readonly block_reason?: string;
+
+  // Игнорируется: роль назначает только владелец в базе (admin)
+  // или админ через POST /croupiers (croupier)
   readonly role?: string;
 }

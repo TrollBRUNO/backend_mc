@@ -23,16 +23,47 @@ export class AccountService {
     return doc;
   }  
 
+  // Создание аккаунта админом из админки. Пароль здесь раньше уходил в базу
+  // открытым текстом, а role бралась из тела запроса
   async create(dto: CreateAccountDto): Promise<Account> {
-    const account = new this.accountModel(dto);
+    const { role: _role, password, ...rest } = dto;
+
+    const account = new this.accountModel({
+      ...rest,
+      ...(password ? { password: await bcrypt.hash(password, 10) } : {}),
+      role: AccountRole.USER,
+    });
+
     return account.save();
-  } 
+  }
+
+  // Поля, которые вообще можно менять через PUT /account/:id.
+  // Роль, залы крупье, token_version, пароль и привязки соцсетей сюда не входят:
+  // раньше тело запроса уходило в базу целиком и любой мог прислать
+  // { "role": "admin" } и стать админом
+  private static readonly UPDATABLE_FIELDS = [
+    'login',
+    'realname',
+    'balance',
+    'bonus_balance',
+    'fake_balance',
+    'image_url',
+    'is_blocked',
+    'block_reason',
+    'locale',
+  ] as const;
 
   async update(id: string, dto: UpdateAccountDto): Promise<Account> {
-    const updated = await this.accountModel.findByIdAndUpdate(id, dto, { new: true }).exec();
+    const patch: Record<string, unknown> = {};
+
+    for (const field of AccountService.UPDATABLE_FIELDS) {
+      if (dto[field] !== undefined) patch[field] = dto[field];
+    }
+
+    const updated = await this.accountModel.findByIdAndUpdate(id, patch, { new: true }).exec();
     if (!updated) throw new NotFoundException(`Account ${id} not found`);
     return updated;
-  }   
+  }
 
   async delete(id: string): Promise<Account> {
     const deleted = await this.accountModel.findByIdAndDelete(id).exec();
