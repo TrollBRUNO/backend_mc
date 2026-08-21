@@ -8,6 +8,48 @@ import { PushService } from '../push/push.service';
 import { CasinoService, JackpotResult } from '../casino/casino.service';
 import { NotificationLogService } from '../notification-log/notification-log.service';
 import { NotificationLogType } from '../notification-log/notification-log.schema';
+import { JackpotLevels, JackpotStateService } from '../jackpot-state/jackpot-state.service';
+import { PushType } from '../push/push-locales';
+import { AudienceCasino, enabledCasinoIds } from '../jackpot-audience/jackpot-audience.util';
+
+// Уровни джекпота от младшего к старшему. weight решает, о каком из
+// одновременно пересечённых уровней сообщить: интереснее всегда старший
+const JACKPOT_LEVELS = [
+  { name: 'mini' as const,   type: NotificationLogType.JACKPOT_MINI,   push: 'jackpot_mini' as PushType,   weight: 1 },
+  { name: 'middle' as const, type: NotificationLogType.JACKPOT_MIDDLE, push: 'jackpot_middle' as PushType, weight: 2 },
+  { name: 'mega' as const,   type: NotificationLogType.JACKPOT_MEGA,   push: 'jackpot_mega' as PushType,   weight: 3 },
+];
+
+const JACKPOT_LOG_TYPES = JACKPOT_LEVELS.map(l => l.type);
+
+const JACKPOT_MAX_PER_DAY = 2;
+const JACKPOT_MIN_GAP_MS = 3 * 60 * 60 * 1000;
+
+
+// Значения одного источника: что было на прошлом тике и что сейчас.
+// Название и город держим мультиязычными: пуш собирается на языке
+// каждого получателя, а не на одном общем
+interface JackpotSnapshot {
+  casinoId: Types.ObjectId;
+  name: Record<string, string>;
+  city: Record<string, string>;
+  address: Record<string, string>;
+  latitude: number | null;
+  longitude: number | null;
+  previous: JackpotLevels | null;
+  current: JackpotLevels;
+}
+
+interface Crossing {
+  type: NotificationLogType;
+  push: PushType;
+  weight: number;
+  value: number;
+  casinoId: Types.ObjectId;
+  name: Record<string, string>;
+  city: Record<string, string>;
+  address: Record<string, string>;
+}
 
 @Injectable()
 export class TasksService {
@@ -19,6 +61,7 @@ export class TasksService {
     private readonly pushService: PushService,
     private readonly casinoService: CasinoService,
     private readonly notificationLogService: NotificationLogService,
+    private readonly jackpotStateService: JackpotStateService,
   ) {}
 
   // Каждую минуту
@@ -165,7 +208,11 @@ export class TasksService {
   // Каждый час
   @Cron('0 * * * *')
   async jackpotThresholdCheck() {
-    const casinos = await this.casinoModel.find();
+    // Проход 1: опрашиваем залы один раз и запоминаем значения.
+    // Раньше опрос висел внутри цикла по пользователям, то есть за один тик
+    // уходило (юзеры × залы × источники) запросов на внешние серверы
+    const snapshots = await this.collectJackpotSnapshots();
+    if (snapshots.length === 0) return;
 
     const users = await this.accountModel.find({
       is_blocked: false,
@@ -173,71 +220,204 @@ export class TasksService {
       'notification_settings.jackpot_enabled': true,
     });
 
-    for (const u of users) {
-      // TODO гранулярность: сейчас один порог для всех казино.
-      // В будущем: читать индивидуальный порог per casino_id
-      // и фильтровать notification_logs по casino_id.
-      const thresholds = u.notification_settings.jackpot_thresholds;
-      const accountId = u._id as unknown as Types.ObjectId;
+    // Проход 2: по пользователям, уже без единого сетевого запроса
+    for (const user of users) {
+      await this.notifyUserAboutJackpots(user, snapshots).catch(err =>
+        this.logger.error(`[jackpot] ${user.login}: ${err}`),
+      );
+    }
+  }
 
-      for (const casino of casinos) {
-        const results: JackpotResult[] = await this.casinoService.getJackpotValuesForCasino(casino);
+  // Свежие значения зала рядом с прошлыми, чтобы поймать именно момент
+  // пересечения порога, а не факт «сейчас выше»
+  private async collectJackpotSnapshots(): Promise<JackpotSnapshot[]> {
+    const casinos = await this.casinoModel.find();
+    const previous = await this.jackpotStateService.loadAll();
 
-        for (const result of results) {
-          if ('error' in result) continue;
+    const snapshots: JackpotSnapshot[] = [];
 
-          type JackpotTask = {
-            type: NotificationLogType;
-            jackpotValue: number;
-            promise: Promise<void>;
-          };
+    for (const casino of casinos) {
+      const casinoId = casino._id as unknown as Types.ObjectId;
+      const urls = casino.jackpot_url ?? [];
+      const results: JackpotResult[] =
+        await this.casinoService.getJackpotValuesForCasino(casino);
 
-          const tasks: JackpotTask[] = [];
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        const url = urls[i];
+        if (!url || 'error' in result) continue;
 
-          if (result.mini >= thresholds.mini) {
-            tasks.push({
-              type: NotificationLogType.JACKPOT_MINI,
-              jackpotValue: result.mini,
-              promise: this.pushService.sendLocalized(u.fcm_token, 'jackpot_mini', u.locale),
-            });
-          }
+        const current: JackpotLevels = {
+          mini: result.mini,
+          middle: result.middle,
+          mega: result.mega,
+        };
 
-          if (result.middle >= thresholds.middle) {
-            tasks.push({
-              type: NotificationLogType.JACKPOT_MIDDLE,
-              jackpotValue: result.middle,
-              promise: this.pushService.sendLocalized(u.fcm_token, 'jackpot_middle', u.locale),
-            });
-          }
+        snapshots.push({
+          casinoId,
+          name: this.toPlainRecord(casino.name),
+          city: this.toPlainRecord(casino.city),
+          address: this.toPlainRecord(casino.address),
+          latitude: casino.latitude,
+          longitude: casino.longitude,
+          previous: previous.get(JackpotStateService.key(casinoId, url)) ?? null,
+          current,
+        });
 
-          if (result.mega >= thresholds.mega) {
-            tasks.push({
-              type: NotificationLogType.JACKPOT_MEGA,
-              jackpotValue: result.mega,
-              promise: this.pushService.sendLocalized(u.fcm_token, 'jackpot_mega', u.locale),
-            });
-          }
-
-          if (tasks.length === 0) continue;
-
-          const settledResults = await Promise.allSettled(tasks.map(t => t.promise));
-
-          for (let i = 0; i < settledResults.length; i++) {
-            const settled = settledResults[i];
-            const task = tasks[i];
-            if (settled.status === 'fulfilled') {
-              await this.notificationLogService.log(accountId, task.type, {
-                casino_id: (casino._id as any).toString(),
-                jackpot_value: task.jackpotValue,
-              });
-              this.logger.log(`[jackpot] ${task.type} sent to ${u.login} (${casino.city.bg})`);
-            } else {
-              this.logger.error(`[jackpot] ${task.type} failed for ${u.login}: ${settled.reason}`);
-            }
-          }
-        }
+        await this.jackpotStateService.save(casinoId, url, current);
       }
     }
+
+    return snapshots;
+  }
+
+  private async notifyUserAboutJackpots(
+    user: AccountDocument,
+    snapshots: JackpotSnapshot[],
+  ): Promise<void> {
+    const now = new Date();
+    const accountId = user._id as unknown as Types.ObjectId;
+
+    // Предохранитель: не больше двух джекпот-пушей в сутки и не чаще
+    // раза в три часа. Основную работу делает пересечение порога,
+    // это защита на случай, когда сразу несколько залов дошли до планки
+    const sentToday = await this.notificationLogService.countOfTypesSince(
+      accountId,
+      JACKPOT_LOG_TYPES,
+      new Date(now.getTime() - 24 * 60 * 60 * 1000),
+    );
+    if (sentToday >= JACKPOT_MAX_PER_DAY) return;
+
+    const lastSent = await this.notificationLogService.getLastOfTypes(
+      accountId,
+      JACKPOT_LOG_TYPES,
+    );
+    if (lastSent && now.getTime() - lastSent.getTime() < JACKPOT_MIN_GAP_MS) {
+      return;
+    }
+
+    const crossing = this.findBestCrossing(user, snapshots);
+    if (!crossing) return;
+
+    // Пуш называет конкретный зал, его адрес и сумму: теперь мы точно знаем
+    // всё это, а раньше слали по всем залам подряд и назвать было нечего
+    const casinoName = this.pick(crossing.name, user.locale);
+    const place = this.casinoPlace(crossing, user.locale);
+
+    try {
+      await this.pushService.sendLocalized(user.fcm_token, crossing.push, user.locale, {
+        casino: casinoName,
+        address: place,
+        amount: this.formatAmount(crossing.value),
+      });
+    } catch (err) {
+      this.logger.error(`[jackpot] ${crossing.type} failed for ${user.login}: ${err}`);
+      return;
+    }
+
+    await this.notificationLogService.log(accountId, crossing.type, {
+      casino_id: String(crossing.casinoId),
+      jackpot_value: crossing.value,
+    });
+
+    this.logger.log(
+      `[jackpot] ${crossing.type} sent to ${user.login} (${casinoName}, ${crossing.value})`,
+    );
+  }
+
+  // Из всех пересечений выбираем одно, самое крупное: они произошли
+  // одновременно, и три пуша подряд об одном зале — это тот самый спам,
+  // от которого мы уходим
+  private findBestCrossing(
+    user: AccountDocument,
+    snapshots: JackpotSnapshot[],
+  ): Crossing | null {
+    const thresholds = user.notification_settings.jackpot_thresholds;
+    const allowed = this.casinoIdsForUser(user, snapshots);
+
+    let best: Crossing | null = null;
+
+    for (const snapshot of snapshots) {
+      // Первый замер этого источника: сравнивать не с чем, молчим
+      if (!snapshot.previous) continue;
+      if (!allowed.has(String(snapshot.casinoId))) continue;
+
+      for (const level of JACKPOT_LEVELS) {
+        const threshold = thresholds?.[level.name] ?? 0;
+
+        // Порог 0 — уровень выключен пользователем
+        if (threshold <= 0) continue;
+
+        const before = snapshot.previous[level.name];
+        const after = snapshot.current[level.name];
+
+        // Именно пересечение снизу вверх. Пока джекпот держится выше
+        // порога, повторных пушей нет; они вернутся, когда он выпадет
+        // и дорастёт до планки заново
+        if (!(before < threshold && after >= threshold)) continue;
+
+        if (best && level.weight <= best.weight) continue;
+
+        best = {
+          type: level.type,
+          push: level.push,
+          weight: level.weight,
+          value: after,
+          casinoId: snapshot.casinoId,
+          name: snapshot.name,
+          city: snapshot.city,
+          address: snapshot.address,
+        };
+      }
+    }
+
+    return best;
+  }
+
+  // Подбор залов делегирован общему модулю: тем же кодом пользуется
+  // экран настроек, иначе список в настройках разошёлся бы с рассылкой
+  private casinoIdsForUser(
+    user: AccountDocument,
+    snapshots: JackpotSnapshot[],
+  ): Set<string> {
+    const casinos: AudienceCasino[] = snapshots.map(s => ({
+      casinoId: String(s.casinoId),
+      name: s.name,
+      city: s.city,
+      latitude: s.latitude,
+      longitude: s.longitude,
+    }));
+
+    return enabledCasinoIds(user, casinos);
+  }
+
+  // Мультиязычные поля казино приходят из mongoose то объектом, то Map
+  private toPlainRecord(value: unknown): Record<string, string> {
+    if (!value) return {};
+    return value instanceof Map
+      ? (Object.fromEntries(value) as Record<string, string>)
+      : (value as Record<string, string>);
+  }
+
+  private pick(record: Record<string, string>, locale?: string | null): string {
+    const key = (locale ?? '').toLowerCase();
+    return record[key] ?? record.bg ?? record.en ?? Object.values(record)[0] ?? '';
+  }
+
+  // «бул. Източен 48, Пловдив» на языке получателя пуша
+  private casinoPlace(crossing: Crossing, locale?: string | null): string {
+    return [
+      this.pick(crossing.address, locale),
+      this.pick(crossing.city, locale),
+    ].filter(Boolean).join(', ');
+  }
+
+  // 2540.37 -> «2 540»: разделитель неразрывный, чтобы сумма не переносилась
+  // посреди числа, и одинаковый во всех локалях
+  private formatAmount(value: number): string {
+    return Math.floor(value)
+      .toString()
+      .replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0');
   }
 
   // Ежедневно в 18:00

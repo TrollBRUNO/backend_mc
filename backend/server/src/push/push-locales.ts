@@ -92,68 +92,68 @@ const PUSHES: Record<PushType, Record<Locale, PushPayload>> = {
   },
   jackpot_mini: {
     [Locale.BG]: {
-      title: 'Mini Jackpot расте!',
-      body: 'Проверьте текущия jackpot в зала.',
+      title: 'Mini Jackpot расте — {amount} €',
+      body: 'Добре дошли в {casino} — {address}',
     },
     [Locale.EL]: {
-      title: 'Το Mini Jackpot μεγαλώνει!',
-      body: 'Δείτε το τρέχον τζάκποτ στην αίθουσα.',
+      title: 'Το Mini Jackpot μεγαλώνει — {amount} €',
+      body: 'Καλώς ήρθατε στο {casino} — {address}',
     },
     [Locale.EN]: {
-      title: 'Mini Jackpot is growing!',
-      body: 'Check the current jackpot in the hall.',
+      title: 'Mini Jackpot is growing — {amount} €',
+      body: 'Welcome to {casino} — {address}',
     },
     [Locale.RU]: {
-      title: 'Mini Jackpot растёт!',
-      body: 'Проверьте текущий джекпот в зале.',
+      title: 'Mini Jackpot растёт — {amount} €',
+      body: 'Добро пожаловать в {casino} — {address}',
     },
     [Locale.TR]: {
-      title: 'Mini Jackpot büyüyor!',
-      body: 'Salondaki güncel jackpotu kontrol edin.',
+      title: 'Mini Jackpot büyüyor — {amount} €',
+      body: 'Sizi {casino} bekliyor — {address}',
     },
   },
   jackpot_middle: {
     [Locale.BG]: {
-      title: 'Middle Jackpot расте!',
-      body: 'Проверьте текущия jackpot в зала.',
+      title: 'Middle Jackpot расте — {amount} €',
+      body: 'Добре дошли в {casino} — {address}',
     },
     [Locale.EL]: {
-      title: 'Το Middle Jackpot μεγαλώνει!',
-      body: 'Δείτε το τρέχον τζάκποτ στην αίθουσα.',
+      title: 'Το Middle Jackpot μεγαλώνει — {amount} €',
+      body: 'Καλώς ήρθατε στο {casino} — {address}',
     },
     [Locale.EN]: {
-      title: 'Middle Jackpot is growing!',
-      body: 'Check the current jackpot in the hall.',
+      title: 'Middle Jackpot is growing — {amount} €',
+      body: 'Welcome to {casino} — {address}',
     },
     [Locale.RU]: {
-      title: 'Middle Jackpot растёт!',
-      body: 'Проверьте текущий джекпот в зале.',
+      title: 'Middle Jackpot растёт — {amount} €',
+      body: 'Добро пожаловать в {casino} — {address}',
     },
     [Locale.TR]: {
-      title: 'Middle Jackpot büyüyor!',
-      body: 'Salondaki güncel jackpotu kontrol edin.',
+      title: 'Middle Jackpot büyüyor — {amount} €',
+      body: 'Sizi {casino} bekliyor — {address}',
     },
   },
   jackpot_mega: {
     [Locale.BG]: {
-      title: 'Mega Jackpot расте!',
-      body: 'Проверьте текущия jackpot в зала.',
+      title: 'Mega Jackpot расте — {amount} €',
+      body: 'Добре дошли в {casino} — {address}',
     },
     [Locale.EL]: {
-      title: 'Το Mega Jackpot μεγαλώνει!',
-      body: 'Δείτε το τρέχον τζάκποτ στην αίθουσα.',
+      title: 'Το Mega Jackpot μεγαλώνει — {amount} €',
+      body: 'Καλώς ήρθατε στο {casino} — {address}',
     },
     [Locale.EN]: {
-      title: 'Mega Jackpot is growing!',
-      body: 'Check the current jackpot in the hall.',
+      title: 'Mega Jackpot is growing — {amount} €',
+      body: 'Welcome to {casino} — {address}',
     },
     [Locale.RU]: {
-      title: 'Mega Jackpot растёт!',
-      body: 'Проверьте текущий джекпот в зале.',
+      title: 'Mega Jackpot растёт — {amount} €',
+      body: 'Добро пожаловать в {casino} — {address}',
     },
     [Locale.TR]: {
-      title: 'Mega Jackpot büyüyor!',
-      body: 'Salondaki güncel jackpotu kontrol edin.',
+      title: 'Mega Jackpot büyüyor — {amount} €',
+      body: 'Sizi {casino} bekliyor — {address}',
     },
   },
   nightly_reminder: {
@@ -256,7 +256,28 @@ export function normalizeLocale(locale?: string | null): Locale {
   return Locale.BG;
 }
 
-export function getPushPayload(type: PushType, locale?: string | null): PushPayload {
+// Значения для плейсхолдеров вида {casino} и {amount} в текстах пушей
+export type PushParams = Record<string, string | number>;
+
+function fill(text: string, params?: PushParams): string {
+  if (!params) return text;
+  return text.replace(/\{(\w+)\}/g, (match, key) =>
+    key in params ? String(params[key]) : match,
+  );
+}
+
+export function getPushPayload(
+  type: PushType,
+  locale?: string | null,
+  params?: PushParams,
+): PushPayload {
   const normalizedLocale = normalizeLocale(locale);
-  return PUSHES[type][normalizedLocale] ?? PUSHES[type][Locale.BG];
+  const payload = PUSHES[type][normalizedLocale] ?? PUSHES[type][Locale.BG];
+
+  if (!params) return payload;
+
+  return {
+    title: fill(payload.title, params),
+    body: fill(payload.body, params),
+  };
 }

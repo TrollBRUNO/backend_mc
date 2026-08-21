@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import * as admin from 'firebase-admin'; 
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { getPushPayload, PushPayload, PushType } from './push-locales';
+import { getPushPayload, PushParams, PushPayload, PushType } from './push-locales';
 
 @Injectable()
 export class PushService {
@@ -21,10 +21,15 @@ export class PushService {
     }
   }
 
-  async send(token: string, payload: { title: string; body: string } | PushPayload, locale?: string | null) {
+  async send(
+    token: string,
+    payload: { title: string; body: string } | PushPayload,
+    locale?: string | null,
+    params?: PushParams,
+  ) {
     if (!token) return;
 
-    const resolvedPayload = this.resolvePayload(payload, locale);
+    const resolvedPayload = this.resolvePayload(payload, locale, params);
 
     try {
       await admin.messaging().send({
@@ -39,17 +44,27 @@ export class PushService {
     }
   }
 
-  async sendLocalized(token: string, type: PushType, locale?: string | null) {
-    const payload = getPushPayload(type, locale);
+  // params подставляются в плейсхолдеры текста: {casino}, {amount}
+  async sendLocalized(
+    token: string,
+    type: PushType,
+    locale?: string | null,
+    params?: PushParams,
+  ) {
+    const payload = getPushPayload(type, locale, params);
     await this.send(token, payload, locale);
   }
 
-  private resolvePayload(payload: { title: string; body: string } | PushPayload, locale?: string | null) {
+  private resolvePayload(
+    payload: { title: string; body: string } | PushPayload,
+    locale?: string | null,
+    params?: PushParams,
+  ) {
     if ('title' in payload && 'body' in payload) {
       return payload;
     }
 
-    return getPushPayload(payload as PushType, locale);
+    return getPushPayload(payload as PushType, locale, params);
   }
 }
 

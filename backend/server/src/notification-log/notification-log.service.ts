@@ -71,6 +71,35 @@ export class NotificationLogService {
       .exec();
   }
 
+  // Джекпот-пуши ограничиваются не по одному типу, а всей группой сразу:
+  // для человека mini, middle и mega — это одно и то же уведомление о зале
+  async getLastOfTypes(
+    accountId: Types.ObjectId,
+    types: NotificationLogType[],
+  ): Promise<Date | null> {
+    const doc = await this.logModel
+      .findOne({ account_id: accountId, type: { $in: types } })
+      .sort({ sent_at: -1 })
+      .select('sent_at')
+      .lean()
+      .exec();
+    return doc ? doc.sent_at : null;
+  }
+
+  async countOfTypesSince(
+    accountId: Types.ObjectId,
+    types: NotificationLogType[],
+    since: Date,
+  ): Promise<number> {
+    return this.logModel
+      .countDocuments({
+        account_id: accountId,
+        type: { $in: types },
+        sent_at: { $gte: since },
+      })
+      .exec();
+  }
+
   async countOfTypeSince(
     accountId: Types.ObjectId,
     type: NotificationLogType,

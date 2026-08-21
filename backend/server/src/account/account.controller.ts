@@ -68,8 +68,8 @@ export class AccountController {
     @Req() req,
     @Body() dto: BindCardDto,
   ) {
-    if (!dto.card_id || !dto.city) {
-      throw new BadRequestException('card_id and city are required');
+    if (!dto.card_id || !dto.casino_id) {
+      throw new BadRequestException('card_id and casino_id are required');
     }
 
     const card = await this.accountService.bindCard(req.user.sub, dto);
@@ -115,12 +115,17 @@ export class AccountController {
   // 6) checkCard
   // ----------------------------------------------------------
   @Post('check-card')
-  async checkCard(@Body('card_id') cardId: string) {
+  async checkCard(
+    @Body('card_id') cardId: string,
+    // Необязателен ради старых клиентов: без него проверка идёт по всей базе,
+    // как раньше. Новый клиент присылает зал и получает проверку в его пределах
+    @Body('casino_id') casinoId?: string,
+  ) {
     if (!cardId) {
       throw new BadRequestException('card_id_required');
     }
 
-    await this.accountService.checkCardAvailability(cardId);
+    await this.accountService.checkCardAvailability(cardId, casinoId);
 
     return { ok: true };
   }
@@ -164,7 +169,7 @@ export class AccountController {
   @Throttle({ global: { ttl: 60000, limit: 20 } })
   @Post('register')
   async register(@Body() dto: any) {
-    const { login, password, realname, cards, role, locale } = dto;
+    const { login, password, realname, cards, role, locale, notification_preference } = dto;
 
     if (!login || !password || !realname) {
       throw new BadRequestException('MISSING_FIELDS');
@@ -177,6 +182,8 @@ export class AccountController {
       cards,
       role,
       locale,
+      // Выбор городов и сетей на шаге регистрации — необязательный
+      notification_preference,
     });
   }
 
@@ -334,6 +341,23 @@ export class AccountController {
     return this.accountService.sort(field, direction);
   }
 
+  // Привязка карты чужому аккаунту — только админу. Раньше админка слала
+  // сюда POST /account/bind-card, а тот берёт аккаунт из токена, то есть
+  // карта уходила на аккаунт самого админа, а не того, кого он редактирует
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @Post(':id/cards')
+  async addCardForAccount(
+    @Param('id') accountId: string,
+    @Body() dto: BindCardDto,
+  ) {
+    if (!dto.card_id || !dto.casino_id) {
+      throw new BadRequestException('card_id and casino_id are required');
+    }
+
+    const card = await this.accountService.bindCard(accountId, dto);
+    return { success: true, card };
+  }
+
   @UseGuards(JwtAuthGuard, AdminGuard)
   @Put(':id/cards/:cardId')
   async updateCard(
@@ -342,6 +366,58 @@ export class AccountController {
     @Body() dto: any
   ) {
     return this.accountService.updateCard(accountId, cardId, dto);
+  }
+
+  // Список залов с признаком «шлём ли уведомления» для экрана настроек
+  @UseGuards(JwtAuthGuard)
+  @Get('casino-notifications')
+  async getCasinoNotifications(@Req() req) {
+    return this.accountService.getCasinoNotifications(req.user.sub);
+  }
+
+  // Ручной переключатель одного зала. enabled: null снимает отметку
+  // и отдаёт зал обратно автоматике
+  @UseGuards(JwtAuthGuard)
+  @Put('casino-notifications/:casinoId')
+  async setCasinoNotification(
+    @Req() req,
+    @Param('casinoId') casinoId: string,
+    @Body('enabled') enabled: boolean | null,
+  ) {
+    return this.accountService.setCasinoNotification(
+      req.user.sub,
+      casinoId,
+      enabled === null || enabled === undefined ? null : Boolean(enabled),
+    );
+  }
+
+  // Города и сети, по которым человек хочет слышать о джекпотах.
+  // Выбирается при регистрации и правится потом из настроек
+  @UseGuards(JwtAuthGuard)
+  @Get('notification-preference')
+  async getNotificationPreference(@Req() req) {
+    return this.accountService.getNotificationPreference(req.user.sub);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Put('notification-preference')
+  async updateNotificationPreference(
+    @Req() req,
+    @Body() body: { cities?: string[]; brands?: string[] },
+  ) {
+    return this.accountService.updateNotificationPreference(req.user.sub, body);
+  }
+
+  // Приложение шлёт координаты на старте, если разрешение уже выдано.
+  // По ним подбираются ближайшие залы тем, у кого нет привязанной карты
+  @UseGuards(JwtAuthGuard)
+  @Post('location')
+  async updateLocation(
+    @Req() req,
+    @Body('lat') lat: number,
+    @Body('lng') lng: number,
+  ) {
+    return this.accountService.updateLocation(req.user.sub, lat, lng);
   }
 
   @UseGuards(JwtAuthGuard)

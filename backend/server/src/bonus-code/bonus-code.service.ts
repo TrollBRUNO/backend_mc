@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Account, AccountDocument } from '../account/account.schema';
+import { normalizeCardId } from '../account/card-id.util';
 import { BonusCode, BonusCodeDocument } from './bonus-code.schema';
 
 @Injectable()
@@ -97,9 +98,10 @@ export class BonusCodeService {
         const account = await this.accountModel.findById(bonus.account_id);
         if (!account) throw new BadRequestException('ACCOUNT_NOT_FOUND');
 
-        //Проверить карту
+        //Проверить карту — по канонической форме, регистр и дефисы не важны
+        const norm = normalizeCardId(card_id);
         const card = account.cards.find(
-            c => c.card_id === card_id && c.active
+            c => c.card_id_norm === norm && c.active
         );
 
         if (!card) {

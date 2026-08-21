@@ -1,16 +1,25 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { Model, Types } from 'mongoose';
-import { Account, AccountDocument } from './account.schema';
+import {
+  Account,
+  AccountDocument,
+  JACKPOT_THRESHOLD_DEFAULTS,
+  JACKPOT_THRESHOLD_LIMITS,
+} from './account.schema';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { AccountRole } from '../auth/roles';
+import { Casino, CasinoDocument } from '../casino/casino.schema';
+import { formatCardId, isValidCardId, normalizeCardId } from './card-id.util';
+import { resolveJackpotAudience } from '../jackpot-audience/jackpot-audience.util';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AccountService {
   constructor(
     @InjectModel(Account.name) private accountModel: Model<AccountDocument>,
+    @InjectModel(Casino.name) private casinoModel: Model<CasinoDocument>,
   ) {}
 
   async findAll(): Promise<Account[]> {
@@ -26,10 +35,13 @@ export class AccountService {
   // Создание аккаунта админом из админки. Пароль здесь раньше уходил в базу
   // открытым текстом, а role бралась из тела запроса
   async create(dto: CreateAccountDto): Promise<Account> {
-    const { role: _role, password, ...rest } = dto;
+    const { role: _role, password, cards, ...rest } = dto;
 
     const account = new this.accountModel({
       ...rest,
+      // Карты и здесь идут через buildCard: раньше они попадали в базу как
+      // есть, без card_id_norm, и бонус по такой карте потом не находился
+      cards: await Promise.all((cards ?? []).map(card => this.buildCard(card))),
       ...(password ? { password: await bcrypt.hash(password, 10) } : {}),
       role: AccountRole.USER,
     });
@@ -92,9 +104,10 @@ export class AccountService {
     realname: string;
     cards?: {
       card_id: string;
-      city: string;
+      casino_id: string;
       active: boolean;
     }[];
+    notification_preference?: { cities?: string[]; brands?: string[] } | null;
     // role из тела запроса игнорируется, см. ниже
     role?: string;
     locale?: string;
@@ -108,21 +121,22 @@ export class AccountService {
       throw new BadRequestException('USERNAME_TAKEN');
     }
 
-    // 2️⃣ карта уникальна
-    if (dto.cards?.length) {
-      const cardId = dto.cards[0].card_id.toUpperCase();
-      await this.checkCardAvailability(cardId);
+    // 2️⃣ карта уникальна в своём зале
+    const cards = await Promise.all(
+      (dto.cards ?? []).map(card => this.buildCard(card)),
+    );
 
-      dto.cards[0].card_id = cardId;
+    for (const card of cards) {
+      await this.checkCardAvailability(card.card_id, String(card.casino_id));
     }
 
     const hash = await bcrypt.hash(dto.password, 10);
-    
+
     const account = new this.accountModel({
       login: dto.login,
       password: hash,
       realname: dto.realname,
-      cards: dto.cards ?? [],
+      cards,
       // Публичная регистрация всегда создаёт обычного пользователя.
       // Роль из тела запроса не берём: иначе кто угодно мог бы прислать
       // role: 'admin' или 'croupier' и выдать себе права.
@@ -130,6 +144,10 @@ export class AccountService {
       // через POST /croupiers.
       role: AccountRole.USER,
       locale: dto.locale ?? 'bg',
+      // Шаг с городом и сетью при регистрации необязателен
+      notification_preference: this.buildNotificationPreference(
+        dto.notification_preference,
+      ),
     });
 
     await account.save();
@@ -169,9 +187,12 @@ export class AccountService {
       throw new NotFoundException('Account not found');
     }
 
-    // 2. Проверяем что карта принадлежит аккаунту
+    // 2. Проверяем что карта принадлежит аккаунту.
+    // Сравниваем канонические формы: в зале номер могут набрать
+    // в другом регистре или с другим расположением дефиса
+    const norm = normalizeCardId(card_id);
     const card = account.cards.find(
-      c => c.card_id === card_id && c.active === true
+      c => c.card_id_norm === norm && c.active === true
     );
 
     if (!card) {
@@ -204,22 +225,62 @@ export class AccountService {
     };
   }
 
+  // Снимок города для card.city. Нужен только тем клиентам, что ещё не умеют
+  // casino_id: у них город в карте — обычная строка. Берём болгарский, он же
+  // дефолтная локаль. После .lean() поле приходит то объектом, то Map
+  private cityLabel(city: unknown): string {
+    const plain = this.toPlainRecord(city);
+    return plain.bg ?? plain.en ?? Object.values(plain)[0] ?? '';
+  }
+
+  // Мультиязычные поля казино приходят из mongoose то объектом, то Map
+  private toPlainRecord(value: unknown): Record<string, string> {
+    if (!value) return {};
+    return value instanceof Map
+      ? (Object.fromEntries(value) as Record<string, string>)
+      : (value as Record<string, string>);
+  }
+
+  // Единая точка, где номер карты приводится к каноническому виду и
+  // привязывается к залу. Всё, что пишет карту в базу, обязано идти через
+  // неё, иначе поиск по card_id_norm мимо такой карты промахнётся
+  private async buildCard(dto: {
+    card_id: string;
+    casino_id: string;
+    active?: boolean;
+  }) {
+    if (!isValidCardId(dto.card_id)) {
+      throw new BadRequestException('INVALID_CARD_ID');
+    }
+    if (!Types.ObjectId.isValid(dto.casino_id)) {
+      throw new BadRequestException('INVALID_CASINO_ID');
+    }
+
+    const casino = await this.casinoModel
+      .findById(dto.casino_id)
+      .select('city')
+      .lean();
+    if (!casino) throw new NotFoundException('Casino not found');
+
+    return {
+      card_id: formatCardId(dto.card_id),
+      card_id_norm: normalizeCardId(dto.card_id),
+      casino_id: new Types.ObjectId(dto.casino_id),
+      city: this.cityLabel(casino.city),
+      active: dto.active ?? true,
+    };
+  }
+
   async bindCard(
     accountId: string,
-    dto: { card_id: string; city: string },
+    dto: { card_id: string; casino_id: string },
   ) {
-    const cardId = dto.card_id.toUpperCase();
+    const card = await this.buildCard(dto);
 
-    await this.checkCardAvailability(cardId);
+    await this.checkCardAvailability(card.card_id, dto.casino_id);
 
     const account = await this.accountModel.findById(accountId);
     if (!account) throw new NotFoundException('Account not found');
-
-    const card = {
-      card_id: cardId,
-      city: dto.city,
-      active: true,
-    };
 
     account.cards.push(card);
     await account.save();
@@ -238,7 +299,9 @@ export class AccountService {
     const account = await this.accountModel.findById(accountId);
     if (!account) throw new NotFoundException('Account not found');
 
-    const card = account.cards.find(c => c.card_id === cardId);
+    const card = account.cards.find(
+      c => c.card_id_norm === normalizeCardId(cardId),
+    );
     if (!card) throw new NotFoundException('Card not found');
 
     card.active = false;
@@ -247,11 +310,26 @@ export class AccountService {
     return card;
   }
 
-  async checkCardAvailability(cardId: string): Promise<void> {
-    const exists = await this.accountModel.findOne({
-      'cards.card_id': cardId,
-      'cards.active': true,
-    });
+  async checkCardAvailability(cardId: string, casinoId?: string): Promise<void> {
+    // Занятость проверяем по канонической форме — иначе одну и ту же карту
+    // можно было бы привязать второй раз, набрав её в другом написании.
+    // И в пределах зала: нумерация у залов своя, PB-123456 в Пловдиве
+    // и PB-123456 в Кирково — две разные карты двух разных людей
+    const match: Record<string, unknown> = {
+      card_id_norm: normalizeCardId(cardId),
+      active: true,
+    };
+
+    // Клиент без casino_id (старая версия приложения) проверяется по всей
+    // базе, как раньше: строже, чем нужно, но чужую карту не отдаст
+    if (casinoId) {
+      if (!Types.ObjectId.isValid(casinoId)) {
+        throw new BadRequestException('INVALID_CASINO_ID');
+      }
+      match.casino_id = new Types.ObjectId(casinoId);
+    }
+
+    const exists = await this.accountModel.findOne({ cards: { $elemMatch: match } });
 
     if (exists) {
       throw new BadRequestException('CARD_ALREADY_USED');
@@ -386,7 +464,10 @@ export class AccountService {
 
   async removeProfileCard(accountId: string, cardId: string) {
     const result = await this.accountModel.updateOne(
-      { _id: new Types.ObjectId(accountId), 'cards.card_id': cardId },
+      {
+        _id: new Types.ObjectId(accountId),
+        'cards.card_id_norm': normalizeCardId(cardId),
+      },
       { $set: { 'cards.$.active': false } }
     );
 
@@ -454,11 +535,17 @@ export class AccountService {
     async search(query: string) {
     const regex = new RegExp(query, 'i');
 
+    // Номер карты ищем ещё и по канонической форме, чтобы админ находил её
+    // в любом написании. Пустая каноническая форма (искали по имени, а не
+    // по карте) дала бы регексп //, совпадающий со всеми — такой пункт не добавляем
+    const normalized = normalizeCardId(query);
+
     return this.accountModel.find({
       $or: [
         { login: regex },
         { realname: regex },
         { 'cards.card_id': regex },
+        ...(normalized ? [{ 'cards.card_id_norm': new RegExp(normalized, 'i') }] : []),
         { 'cards.city': regex },
       ]
     }).lean();
@@ -471,15 +558,34 @@ export class AccountService {
     return this.accountModel.find().sort(sortObj).lean();
   }
 
-  async updateCard(accountId: string, cardId: string, dto: { card_id?: string; city?: string; active?: boolean }) {
+  async updateCard(accountId: string, cardId: string, dto: { card_id?: string; casino_id?: string; active?: boolean }) {
     const account = await this.accountModel.findById(accountId);
     if (!account) throw new NotFoundException('Account not found');
 
-    const card = account.cards.find(c => c.card_id === cardId);
+    const norm = normalizeCardId(cardId);
+    const card = account.cards.find(c => c.card_id_norm === norm);
     if (!card) throw new NotFoundException('Card not found');
 
-    if (dto.card_id) card.card_id = dto.card_id;
-    if (dto.city) card.city = dto.city;
+    // Раньше админ мог записать номер как угодно, и карта переставала
+    // находиться при выдаче бонуса — теперь она нормализуется и здесь
+    if (dto.card_id) {
+      if (!isValidCardId(dto.card_id)) {
+        throw new BadRequestException('INVALID_CARD_ID');
+      }
+      card.card_id = formatCardId(dto.card_id);
+      card.card_id_norm = normalizeCardId(dto.card_id);
+    }
+
+    // Зал меняется только целиком: город — снимок с него, руками не правится
+    if (dto.casino_id) {
+      const moved = await this.buildCard({
+        card_id: dto.card_id ?? card.card_id,
+        casino_id: dto.casino_id,
+      });
+      card.casino_id = moved.casino_id;
+      card.city = moved.city;
+    }
+
     if (dto.active !== undefined) card.active = dto.active;
 
     await account.save();
@@ -489,8 +595,31 @@ export class AccountService {
   async updateNotificationSettings(accountId: string, settings: any) {
     console.log('🔧 updateNotificationSettings:', settings);
     return this.accountModel.findByIdAndUpdate(accountId, {
-      notification_settings: settings,
+      notification_settings: this.sanitizeNotificationSettings(settings),
     }, { new: true });
+  }
+
+  // Пороги приходят с ползунков приложения, но по ним крон решает,
+  // слать ли пуш — поэтому границы проверяем здесь, а не доверяем клиенту.
+  // Мусор и отсутствующие поля откатываются к дефолту
+  private sanitizeNotificationSettings(settings: any) {
+    const incoming = settings?.jackpot_thresholds ?? {};
+
+    const clamp = (level: keyof typeof JACKPOT_THRESHOLD_LIMITS) => {
+      const { min, max } = JACKPOT_THRESHOLD_LIMITS[level];
+      const value = Number(incoming[level]);
+      if (!Number.isFinite(value)) return JACKPOT_THRESHOLD_DEFAULTS[level];
+      return Math.min(Math.max(Math.round(value), min), max);
+    };
+
+    return {
+      ...settings,
+      jackpot_thresholds: {
+        mini: clamp('mini'),
+        middle: clamp('middle'),
+        mega: clamp('mega'),
+      },
+    };
   }
 
   async getNotificationSettings(accountId: string) {
@@ -499,6 +628,137 @@ export class AccountService {
     if (!acc) throw new NotFoundException('Account not found');
 
     return acc.notification_settings;
+  }
+
+  // Списки приходят с клиента: подрезаем, выбрасываем пустые строки и дубли.
+  // Если обе части пусты, предпочтения нет — пишем null, чтобы крон
+  // перешёл дальше по цепочке, к геолокации
+  private buildNotificationPreference(
+    pref?: { cities?: string[]; brands?: string[] } | null,
+  ): { cities: string[]; brands: string[] } | null {
+    const clean = (list?: string[]): string[] => {
+      if (!Array.isArray(list)) return [];
+      const trimmed = list
+        .filter(item => typeof item === 'string')
+        .map(item => item.trim())
+        .filter(Boolean);
+      return [...new Set(trimmed)];
+    };
+
+    const cities = clean(pref?.cities);
+    const brands = clean(pref?.brands);
+
+    if (!cities.length && !brands.length) return null;
+
+    return { cities, brands };
+  }
+
+  // Тот же выбор, но уже после регистрации — из настроек уведомлений.
+  // Пустой запрос очищает предпочтение и возвращает к геолокации
+  async updateNotificationPreference(
+    accountId: string,
+    pref?: { cities?: string[]; brands?: string[] } | null,
+  ) {
+    const value = this.buildNotificationPreference(pref);
+
+    await this.accountModel.updateOne(
+      { _id: accountId },
+      { $set: { notification_preference: value } },
+    );
+
+    return { success: true, notification_preference: value };
+  }
+
+  // Полная картина для экрана настроек: каждый зал с признаком включённости
+  // и причиной. Считается тем же кодом, что и рассылка, — иначе список
+  // в настройках со временем разошёлся бы с тем, что реально приходит
+  async getCasinoNotifications(accountId: string) {
+    const account = await this.accountModel.findById(accountId).lean();
+    if (!account) throw new NotFoundException('Account not found');
+
+    const casinos = await this.casinoModel
+      .find()
+      .select('name city address image_url latitude longitude')
+      .lean();
+
+    const audience = resolveJackpotAudience(
+      account as any,
+      casinos.map(c => ({
+        casinoId: String(c._id),
+        name: this.toPlainRecord(c.name),
+        city: this.toPlainRecord(c.city),
+        latitude: c.latitude,
+        longitude: c.longitude,
+      })),
+    );
+
+    const byId = new Map(audience.map(entry => [entry.casinoId, entry]));
+
+    return casinos.map(casino => {
+      const entry = byId.get(String(casino._id));
+      return {
+        casino_id: String(casino._id),
+        name: this.toPlainRecord(casino.name),
+        city: this.toPlainRecord(casino.city),
+        address: this.toPlainRecord(casino.address),
+        image_url: casino.image_url,
+        enabled: entry?.enabled ?? true,
+        source: entry?.source ?? 'all',
+      };
+    });
+  }
+
+  // Ручной переключатель одного зала. enabled: null снимает ручную отметку
+  // и возвращает зал под управление автоматики
+  async setCasinoNotification(
+    accountId: string,
+    casinoId: string,
+    enabled: boolean | null,
+  ) {
+    if (!Types.ObjectId.isValid(casinoId)) {
+      throw new BadRequestException('INVALID_CASINO_ID');
+    }
+
+    const exists = await this.casinoModel.exists({ _id: casinoId });
+    if (!exists) throw new NotFoundException('Casino not found');
+
+    const update = enabled === null
+      ? { $unset: { [`casino_notification_overrides.${casinoId}`]: '' } }
+      : { $set: { [`casino_notification_overrides.${casinoId}`]: enabled } };
+
+    await this.accountModel.updateOne({ _id: accountId }, update);
+
+    return { success: true, casino_id: casinoId, enabled };
+  }
+
+  async getNotificationPreference(accountId: string) {
+    const account = await this.accountModel
+      .findById(accountId)
+      .select('notification_preference')
+      .lean();
+
+    if (!account) throw new NotFoundException('Account not found');
+
+    return account.notification_preference ?? null;
+  }
+
+  // Координаты приходят с клиента, поэтому проверяем диапазон: в базу
+  // не должен попасть мусор, по которому потом считается расстояние
+  async updateLocation(accountId: string, lat: number, lng: number) {
+    if (
+      typeof lat !== 'number' || typeof lng !== 'number' ||
+      !Number.isFinite(lat) || !Number.isFinite(lng) ||
+      Math.abs(lat) > 90 || Math.abs(lng) > 180
+    ) {
+      throw new BadRequestException('INVALID_LOCATION');
+    }
+
+    await this.accountModel.updateOne(
+      { _id: accountId },
+      { $set: { last_location: { lat, lng, updated_at: new Date() } } },
+    );
+
+    return { success: true };
   }
 
   async updateFcmToken(id: string, token: string) {

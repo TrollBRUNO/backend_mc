@@ -10,10 +10,11 @@ export class CreateAccountDto {
   readonly apple_id?: string;
   readonly locale?: string;
 
+  // Город не присылается: он снимается с зала по casino_id
   readonly cards?: {
     card_id: string;
-    city: string;
-    active: boolean;
+    casino_id: string;
+    active?: boolean;
   }[];
 
   readonly bonus_code?: string;

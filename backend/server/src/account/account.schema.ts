@@ -5,6 +5,21 @@ import { AccountRole } from '../auth/roles';
 
 export type AccountDocument = Account & Document;
 
+// Пороги джекпота — границы ползунков в приложении и значения по умолчанию.
+// Держим их на бэке: именно по порогу решается, слать ли пуш
+// (TasksService.jackpotThresholdCheck), а клиент присылает что угодно
+export const JACKPOT_THRESHOLD_LIMITS = {
+  mini:   { min: 0, max: 1000 },
+  middle: { min: 0, max: 5000 },
+  mega:   { min: 0, max: 10000 },
+} as const;
+
+export const JACKPOT_THRESHOLD_DEFAULTS = {
+  mini: 100,
+  middle: 500,
+  mega: 2000,
+} as const;
+
 @Schema()
 export class Account {
   @Prop({ type: Types.Decimal128, default: 0 })
@@ -55,10 +70,18 @@ export class Account {
   })
   locale: Locale;
 
+  // card_id хранится в том виде, в каком показывается человеку (GOTSE-123456),
+  // а весь поиск идёт по card_id_norm — канонической форме из card-id.util.ts
   @Prop({
     type: [
       {
         card_id: String,
+        card_id_norm: { type: String, index: true },
+        // Зал, выдавший карту. Номера уникальны в пределах зала, а не
+        // глобально: PB-123456 в Пловдиве и PB-123456 в Кирково — разные карты
+        casino_id: { type: Types.ObjectId, ref: 'Casino', default: null, index: true },
+        // Снимок названия города на момент привязки: нужен старым клиентам
+        // и админскому поиску. Актуальное название берётся по casino_id
         city: String,
         active: Boolean
       }
@@ -67,6 +90,8 @@ export class Account {
   })
   cards: {
     card_id: string;
+    card_id_norm: string;
+    casino_id: Types.ObjectId | null;
     city: string;
     active: boolean;
   }[];
@@ -79,9 +104,9 @@ export class Account {
       jackpot_win_post: { type: Boolean, default: true },
       jackpot_enabled: { type: Boolean, default: true },
       jackpot_thresholds: {
-        mini: { type: Number, default: 100 },
-        middle: { type: Number, default: 500 },
-        mega: { type: Number, default: 750 },
+        mini: { type: Number, default: JACKPOT_THRESHOLD_DEFAULTS.mini },
+        middle: { type: Number, default: JACKPOT_THRESHOLD_DEFAULTS.middle },
+        mega: { type: Number, default: JACKPOT_THRESHOLD_DEFAULTS.mega },
       },
     },
     default: {
@@ -90,11 +115,7 @@ export class Account {
       news_post: true,
       jackpot_win_post: true,
       jackpot_enabled: true,
-      jackpot_thresholds: {
-        mini: 100,
-        middle: 500,
-        mega: 750,
-      },
+      jackpot_thresholds: { ...JACKPOT_THRESHOLD_DEFAULTS },
     },
   })
   notification_settings: {
@@ -109,6 +130,54 @@ export class Account {
       mega: number;
     };
   };
+
+  // Города и сети, выбранные при регистрации. Храним правилом, а не списком
+  // залов: если в выбранном городе откроется ещё один зал выбранной сети,
+  // он попадёт в уведомления сам, без правки аккаунтов.
+  //
+  // Оба списка независимы и каждый может быть пустым:
+  //   города есть, сетей нет — все залы этих городов
+  //   сети есть, городов нет — все залы этих сетей в любом городе
+  //   есть и то и другое — залы на пересечении
+  //   пусто и там и там — предпочтения нет, работает геолокация
+  //
+  // cities — канонические ключи городов (city.en), brands — названия сетей (name.en)
+  @Prop({
+    type: {
+      cities: { type: [String], default: [] },
+      brands: { type: [String], default: [] },
+    },
+    default: null,
+  })
+  notification_preference: {
+    cities: string[];
+    brands: string[];
+  } | null;
+
+  // Ручные переключатели залов поверх автоматического подбора: casino_id -> вкл/выкл.
+  // Зал, выключенный руками, остаётся выключенным навсегда — даже если потом
+  // привяжут его карту. Иначе выключатель не выключал бы.
+  // Зала здесь нет — значит человек его не трогал и решает автоматика
+  @Prop({ type: Map, of: Boolean, default: {} })
+  casino_notification_overrides: Map<string, boolean>;
+
+  // Последняя известная позиция пользователя. Пишется приложением на старте,
+  // только если разрешение на геолокацию уже выдано — нового запроса прав
+  // ради этого не показываем. Нужна, чтобы подобрать ближайшие залы тем,
+  // у кого нет привязанной карты
+  @Prop({
+    type: {
+      lat: { type: Number },
+      lng: { type: Number },
+      updated_at: { type: Date },
+    },
+    default: null,
+  })
+  last_location: {
+    lat: number;
+    lng: number;
+    updated_at: Date;
+  } | null;
 
   @Prop({ type: String, default: null })
   bonus_code: string | null;
