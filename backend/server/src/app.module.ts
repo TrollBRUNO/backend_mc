@@ -15,6 +15,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PushModule } from './push/push.module';
 import { TasksModule } from './tasks/tasks.module';
+import { UploadModule } from './upload/upload.module';
 import { NotificationLogModule } from './notification-log/notification-log.module';
 import { ActivityLogModule } from './activity-log/activity-log.module';
 import { CroupierModule } from './croupier/croupier.module';
@@ -42,6 +43,7 @@ import { APP_GUARD } from '@nestjs/core';
     ScheduleModule.forRoot(),
     PushModule,
     TasksModule,
+    UploadModule,
     NotificationLogModule,
     CroupierModule,
     ThrottlerModule.forRoot([

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -14,7 +15,8 @@ import {
 } from '@nestjs/common';
 
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { imageUploadOptions } from '../upload/image-upload.options';
+import { ImageService, toPublicImagePath } from '../upload/image.service';
 import { GalleryService } from './gallery.service';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
@@ -27,7 +29,10 @@ import { AccountRole } from '../auth/roles';
 // это проверяет GalleryService через AuthorshipService.
 @Controller('gallery')
 export class GalleryController {
-  constructor(private readonly galleryService: GalleryService) {}
+  constructor(
+    private readonly galleryService: GalleryService,
+    private readonly imageService: ImageService,
+  ) {}
 
   // ---------- GET ALL ----------
   // Приложение зовёт без параметров, админка может фильтровать
@@ -53,18 +58,12 @@ export class GalleryController {
   @Roles(AccountRole.ADMIN, AccountRole.CROUPIER)
   @Post('upload')
   @UseInterceptors(
-    FileInterceptor('image', {
-      storage: diskStorage({
-        destination: './uploads',
-        filename: (req, file, cb) => {
-          const ext = path.extname(file.originalname);
-          cb(null, uuid() + ext);
-        },
-      }),
-    }),
+    FileInterceptor('image', imageUploadOptions),
   )
-  uploadImage(@UploadedFile() file: any) {
-    const imageUrl = `/uploads/${file.filename}`;
+  async uploadImage(@UploadedFile() file: any) {
+    if (!file) throw new BadRequestException('IMAGE_REQUIRED');
+
+    const imageUrl = await this.imageService.save(file.buffer);
     return { image_url: imageUrl };
   }
 
@@ -73,22 +72,12 @@ export class GalleryController {
   @Roles(AccountRole.ADMIN, AccountRole.CROUPIER)
   @Post()
   @UseInterceptors(
-    FileInterceptor('image', {
-      storage: diskStorage({
-        destination: './uploads',
-        filename: (req, file, cb) => {
-          const ext = path.extname(file.originalname);
-          cb(null, uuid() + ext);
-        },
-      }),
-    }),
+    FileInterceptor('image', imageUploadOptions),
   )
   async create(@Req() req, @UploadedFile() file: any, @Body() body: any) {
     const imageUrl = file
-      ? `/uploads/${file.filename}`
-      : body.image_url
-      ? `/uploads/${body.image_url}`
-      : `/uploads/logo_magic_city5.png`; // дефолт
+      ? await this.imageService.save(file.buffer)
+      : toPublicImagePath(body.image_url) ?? `/uploads/logo_magic_city5.png`;
 
     return this.galleryService.create(
       {
@@ -105,7 +94,7 @@ export class GalleryController {
   @Roles(AccountRole.ADMIN, AccountRole.CROUPIER)
   @Post('json')
   async createJson(@Req() req, @Body() body: any) {
-    const imageUrl = body.image_url ? `/uploads/${body.image_url}` : `/uploads/logo_magic_city5.png`;
+    const imageUrl = toPublicImagePath(body.image_url) ?? `/uploads/logo_magic_city5.png`;
     return this.galleryService.create({ ...body, image_url: imageUrl }, req.user);
   }
 
@@ -114,15 +103,7 @@ export class GalleryController {
   @Roles(AccountRole.ADMIN, AccountRole.CROUPIER)
   @Put(':id')
   @UseInterceptors(
-    FileInterceptor('image', {
-      storage: diskStorage({
-        destination: './uploads',
-        filename: (req, file, cb) => {
-          const ext = path.extname(file.originalname);
-          cb(null, uuid() + ext);
-        },
-      }),
-    }),
+    FileInterceptor('image', imageUploadOptions),
   )
   async update(
     @Req() req,
@@ -131,9 +112,9 @@ export class GalleryController {
     @Body() body: any,
   ) {
     const imageUrl = file
-      ? `/uploads/${file.filename}`
+      ? await this.imageService.save(file.buffer)
       : body.image_url
-      ? `/uploads/${body.image_url}`
+      ? toPublicImagePath(body.image_url)
       : undefined;
 
     return this.galleryService.update(
