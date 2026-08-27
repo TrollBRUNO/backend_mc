@@ -5,12 +5,9 @@ import {
   JackpotState,
   JackpotStateDocument,
 } from './jackpot-state.schema';
+import { JackpotLevels, hasAnyLevel } from './jackpot-levels.util';
 
-export interface JackpotLevels {
-  mini: number;
-  middle: number;
-  mega: number;
-}
+export type { JackpotLevels };
 
 @Injectable()
 export class JackpotStateService {
@@ -32,14 +29,17 @@ export class JackpotStateService {
     const result = new Map<string, JackpotLevels>();
 
     for (const doc of docs) {
-      // Источник, ни разу не отдавший корректных данных, prev не образует
-      if (doc.mini == null || doc.middle == null || doc.mega == null) continue;
+      // Уровни независимы: пустой mega не должен обнулять прошлые значения
+      // mini и middle — иначе один неинициализированный пул глушит весь зал.
+      // Источник, ни разу не отдавший ничего корректного, prev не образует
+      const levels: JackpotLevels = {
+        mini: doc.mini ?? null,
+        middle: doc.middle ?? null,
+        mega: doc.mega ?? null,
+      };
+      if (!hasAnyLevel(levels)) continue;
 
-      result.set(JackpotStateService.key(doc.casino_id, doc.source_url), {
-        mini: doc.mini,
-        middle: doc.middle,
-        mega: doc.mega,
-      });
+      result.set(JackpotStateService.key(doc.casino_id, doc.source_url), levels);
     }
 
     return result;

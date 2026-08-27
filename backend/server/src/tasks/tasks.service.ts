@@ -8,7 +8,12 @@ import { PushService } from '../push/push.service';
 import { CasinoService, JackpotResult } from '../casino/casino.service';
 import { NotificationLogService } from '../notification-log/notification-log.service';
 import { NotificationLogType } from '../notification-log/notification-log.schema';
-import { JackpotLevels, JackpotStateService } from '../jackpot-state/jackpot-state.service';
+import { JackpotStateService } from '../jackpot-state/jackpot-state.service';
+import {
+  JackpotLevels,
+  hasAnyLevel,
+  levelsFromFeed,
+} from '../jackpot-state/jackpot-levels.util';
 import { PushType } from '../push/push-locales';
 import { AudienceCasino, enabledCasinoIds } from '../jackpot-audience/jackpot-audience.util';
 
@@ -34,8 +39,6 @@ interface JackpotSnapshot {
   name: Record<string, string>;
   city: Record<string, string>;
   address: Record<string, string>;
-  latitude: number | null;
-  longitude: number | null;
   previous: JackpotLevels | null;
   current: JackpotLevels;
 }
@@ -205,14 +208,39 @@ export class TasksService {
     );
   }
 
-  // Каждый час
-  @Cron('0 * * * *')
+  // Каждые 5 минут: джекпот может пересечь порог и сорваться внутри часа,
+  // и при часовом опросе такое пересечение не увидел бы никто
+  @Cron('*/5 * * * *')
   async jackpotThresholdCheck() {
     // Проход 1: опрашиваем залы один раз и запоминаем значения.
     // Раньше опрос висел внутри цикла по пользователям, то есть за один тик
     // уходило (юзеры × залы × источники) запросов на внешние серверы
-    const snapshots = await this.collectJackpotSnapshots();
-    if (snapshots.length === 0) return;
+    const casinos = await this.casinoModel.find();
+    const snapshots = await this.collectJackpotSnapshots(casinos);
+    if (snapshots.length === 0) {
+      this.logger.warn('[jackpot] tick: ни один источник не дал значений');
+      return;
+    }
+
+    // Подбор залов считаем по полному списку, а не по снапшотам: зал,
+    // чей источник сейчас лежит, иначе выпал бы из выбора пользователя,
+    // цепочка провалилась бы на геопозицию и человек получил бы пуши
+    // про соседний город, который не выбирал
+    const audience: AudienceCasino[] = casinos.map(casino => ({
+      casinoId: String(casino._id),
+      name: this.toPlainRecord(casino.name),
+      city: this.toPlainRecord(casino.city),
+      latitude: casino.latitude,
+      longitude: casino.longitude,
+    }));
+
+    // Снятые значения под рукой: без них разбор «почему не пришло»
+    // упирается в то, что крон вообще ничего о себе не сообщает
+    this.logger.debug(
+      `[jackpot] tick: ${snapshots
+        .map(s => `${this.pick(s.name, 'en')} ${JSON.stringify(s.current)}`)
+        .join('; ')}`,
+    );
 
     const users = await this.accountModel.find({
       is_blocked: false,
@@ -222,7 +250,7 @@ export class TasksService {
 
     // Проход 2: по пользователям, уже без единого сетевого запроса
     for (const user of users) {
-      await this.notifyUserAboutJackpots(user, snapshots).catch(err =>
+      await this.notifyUserAboutJackpots(user, snapshots, audience).catch(err =>
         this.logger.error(`[jackpot] ${user.login}: ${err}`),
       );
     }
@@ -230,8 +258,9 @@ export class TasksService {
 
   // Свежие значения зала рядом с прошлыми, чтобы поймать именно момент
   // пересечения порога, а не факт «сейчас выше»
-  private async collectJackpotSnapshots(): Promise<JackpotSnapshot[]> {
-    const casinos = await this.casinoModel.find();
+  private async collectJackpotSnapshots(
+    casinos: CasinoDocument[],
+  ): Promise<JackpotSnapshot[]> {
     const previous = await this.jackpotStateService.loadAll();
 
     const snapshots: JackpotSnapshot[] = [];
@@ -245,21 +274,26 @@ export class TasksService {
       for (let i = 0; i < results.length; i++) {
         const result = results[i];
         const url = urls[i];
-        if (!url || 'error' in result) continue;
+        if (!url) continue;
 
-        const current: JackpotLevels = {
-          mini: result.mini,
-          middle: result.middle,
-          mega: result.mega,
-        };
+        if ('error' in result) {
+          this.logger.warn(`[jackpot] ${url}: ${result.details}`);
+          continue;
+        }
+
+        // Названия пулов у залов свои, поэтому уровень определяется
+        // порядком, а не именем — см. jackpot-levels.util
+        const current = levelsFromFeed(result.jackpots);
+        if (!hasAnyLevel(current)) {
+          this.logger.warn(`[jackpot] ${url}: пулы без пригодных значений`);
+          continue;
+        }
 
         snapshots.push({
           casinoId,
           name: this.toPlainRecord(casino.name),
           city: this.toPlainRecord(casino.city),
           address: this.toPlainRecord(casino.address),
-          latitude: casino.latitude,
-          longitude: casino.longitude,
           previous: previous.get(JackpotStateService.key(casinoId, url)) ?? null,
           current,
         });
@@ -274,6 +308,7 @@ export class TasksService {
   private async notifyUserAboutJackpots(
     user: AccountDocument,
     snapshots: JackpotSnapshot[],
+    audience: AudienceCasino[],
   ): Promise<void> {
     const now = new Date();
     const accountId = user._id as unknown as Types.ObjectId;
@@ -296,7 +331,7 @@ export class TasksService {
       return;
     }
 
-    const crossing = this.findBestCrossing(user, snapshots);
+    const crossing = this.findBestCrossing(user, snapshots, audience);
     if (!crossing) return;
 
     // Пуш называет конкретный зал, его адрес и сумму: теперь мы точно знаем
@@ -331,9 +366,10 @@ export class TasksService {
   private findBestCrossing(
     user: AccountDocument,
     snapshots: JackpotSnapshot[],
+    audience: AudienceCasino[],
   ): Crossing | null {
     const thresholds = user.notification_settings.jackpot_thresholds;
-    const allowed = this.casinoIdsForUser(user, snapshots);
+    const allowed = enabledCasinoIds(user, audience);
 
     let best: Crossing | null = null;
 
@@ -350,6 +386,10 @@ export class TasksService {
 
         const before = snapshot.previous[level.name];
         const after = snapshot.current[level.name];
+
+        // У источника нет такого уровня (пулов меньше трёх) или замер
+        // не состоялся — сравнивать нечего
+        if (before === null || after === null) continue;
 
         // Именно пересечение снизу вверх. Пока джекпот держится выше
         // порога, повторных пушей нет; они вернутся, когда он выпадет
@@ -372,23 +412,6 @@ export class TasksService {
     }
 
     return best;
-  }
-
-  // Подбор залов делегирован общему модулю: тем же кодом пользуется
-  // экран настроек, иначе список в настройках разошёлся бы с рассылкой
-  private casinoIdsForUser(
-    user: AccountDocument,
-    snapshots: JackpotSnapshot[],
-  ): Set<string> {
-    const casinos: AudienceCasino[] = snapshots.map(s => ({
-      casinoId: String(s.casinoId),
-      name: s.name,
-      city: s.city,
-      latitude: s.latitude,
-      longitude: s.longitude,
-    }));
-
-    return enabledCasinoIds(user, casinos);
   }
 
   // Мультиязычные поля казино приходят из mongoose то объектом, то Map

@@ -5,8 +5,9 @@ import {
   Account,
   AccountDocument,
   JACKPOT_THRESHOLD_DEFAULTS,
-  JACKPOT_THRESHOLD_LIMITS,
 } from './account.schema';
+import { JackpotSettingsService } from '../jackpot-settings/jackpot-settings.service';
+import { clampThreshold } from '../jackpot-settings/jackpot-settings.schema';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { AccountRole } from '../auth/roles';
@@ -20,6 +21,7 @@ export class AccountService {
   constructor(
     @InjectModel(Account.name) private accountModel: Model<AccountDocument>,
     @InjectModel(Casino.name) private casinoModel: Model<CasinoDocument>,
+    private readonly jackpotSettings: JackpotSettingsService,
   ) {}
 
   async findAll(): Promise<Account[]> {
@@ -595,21 +597,27 @@ export class AccountService {
   async updateNotificationSettings(accountId: string, settings: any) {
     console.log('🔧 updateNotificationSettings:', settings);
     return this.accountModel.findByIdAndUpdate(accountId, {
-      notification_settings: this.sanitizeNotificationSettings(settings),
+      notification_settings: await this.sanitizeNotificationSettings(settings),
     }, { new: true });
   }
 
   // Пороги приходят с ползунков приложения, но по ним крон решает,
   // слать ли пуш — поэтому границы проверяем здесь, а не доверяем клиенту.
+  //
+  // Рамки берём те же, что рисуют шкалы: админ мог их сузить, а приложение
+  // на телефоне остаться старым и прислать значение из прежнего диапазона.
   // Мусор и отсутствующие поля откатываются к дефолту
-  private sanitizeNotificationSettings(settings: any) {
+  private async sanitizeNotificationSettings(settings: any) {
     const incoming = settings?.jackpot_thresholds ?? {};
+    const ranges = await this.jackpotSettings.get();
 
-    const clamp = (level: keyof typeof JACKPOT_THRESHOLD_LIMITS) => {
-      const { min, max } = JACKPOT_THRESHOLD_LIMITS[level];
-      const value = Number(incoming[level]);
-      if (!Number.isFinite(value)) return JACKPOT_THRESHOLD_DEFAULTS[level];
-      return Math.min(Math.max(Math.round(value), min), max);
+    const clamp = (level: 'mini' | 'middle' | 'mega') => {
+      const value = incoming[level];
+      const raw = value === undefined || value === null || Number.isNaN(Number(value))
+        ? JACKPOT_THRESHOLD_DEFAULTS[level]
+        : value;
+
+      return clampThreshold(raw, ranges[level]);
     };
 
     return {
@@ -761,7 +769,26 @@ export class AccountService {
     return { success: true };
   }
 
+  // Пуш-токен принадлежит устройству, а не аккаунту: на одном телефоне
+  // сегодня один человек, завтра другой. Отбираем токен у всех, кто держал
+  // его раньше, иначе крон разошлёт уведомления обоим и на телефоне
+  // появятся пуши предыдущего владельца
   async updateFcmToken(id: string, token: string) {
+    if (!token) return null;
+
+    await this.accountModel.updateMany(
+      { fcm_token: token, _id: { $ne: id } },
+      { $set: { fcm_token: null } },
+    );
+
     return this.accountModel.findByIdAndUpdate(id, { fcm_token: token });
+  }
+
+  // При выходе токен снимаем: до следующего входа устройство ничьё
+  async clearFcmToken(accountId: Types.ObjectId | string) {
+    await this.accountModel.updateOne(
+      { _id: accountId },
+      { $set: { fcm_token: null } },
+    );
   }
 }

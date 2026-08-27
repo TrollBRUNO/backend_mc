@@ -19,6 +19,7 @@ import { UploadModule } from './upload/upload.module';
 import { NotificationLogModule } from './notification-log/notification-log.module';
 import { ActivityLogModule } from './activity-log/activity-log.module';
 import { CroupierModule } from './croupier/croupier.module';
+import { JackpotSettingsModule } from './jackpot-settings/jackpot-settings.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 
@@ -46,6 +47,7 @@ import { APP_GUARD } from '@nestjs/core';
     UploadModule,
     NotificationLogModule,
     CroupierModule,
+    JackpotSettingsModule,
     ThrottlerModule.forRoot([
       { name: 'global', ttl: 60000, limit: 400 },
     ]),

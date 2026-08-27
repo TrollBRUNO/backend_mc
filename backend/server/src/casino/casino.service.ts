@@ -10,11 +10,13 @@ import { Author, AuthorshipService } from '../activity-log/authorship.service';
 import { ActivityLogService } from '../activity-log/activity-log.service';
 import { ActivityAction, ActivityEntity } from '../activity-log/activity-log.schema';
 import { CurrentUser } from '../auth/roles';
+import { JackpotFeedEntry } from '../jackpot-state/jackpot-levels.util';
 
-export interface JackpotValues {
-  mini: number;
-  middle: number;
-  mega: number;
+// Ровно то, что отдаёт сервер зала: массив пулов с собственными названиями.
+// Раньше тут значилось { mini, middle, mega } — формы, которой в ответе нет
+// и не было, из-за чего крон рассылки читал undefined
+export interface JackpotFeed {
+  jackpots: JackpotFeedEntry[];
 }
 
 export interface JackpotError {
@@ -23,7 +25,7 @@ export interface JackpotError {
   details: string;
 }
 
-export type JackpotResult = JackpotValues | JackpotError;
+export type JackpotResult = JackpotFeed | JackpotError;
 
 // Входящее мероприятие в общем PUT /casino/:id — может нести _id уже
 // существующего, тогда его авторство сохраняется
@@ -354,7 +356,15 @@ export class CasinoService {
         throw new Error(`Jackpot server responded with ${response.status}`);
       }
 
-      return await response.json(); // { mini, middle, mega }
+      // Ответ уходит в приложение как есть — оно разбирает jackpots[] само.
+      // Проверяем только, что это вообще фид: иначе и крон, и экран
+      // молча показывали бы пустоту вместо «источник сломался»
+      const payload = await response.json();
+      if (!payload || !Array.isArray(payload.jackpots)) {
+        throw new Error('Unexpected payload: no jackpots[]');
+      }
+
+      return payload as JackpotFeed;
     } catch (error) {
       clearTimeout(timeout);
       return {

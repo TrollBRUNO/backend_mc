@@ -5,6 +5,7 @@ import { AccountService } from './account.service';
 import { AccountController } from './account.controller';
 import { Casino, CasinoSchema } from '../casino/casino.schema';
 import { PushModule } from '../push/push.module';
+import { JackpotSettingsModule } from '../jackpot-settings/jackpot-settings.module';
 
 @Module({
   imports: [
@@ -15,6 +16,8 @@ import { PushModule } from '../push/push.module';
       { name: Casino.name, schema: CasinoSchema },
     ]),
     PushModule,
+    // Рамки, в которые упираются пороги джекпота при записи настроек
+    JackpotSettingsModule,
   ],
   providers: [AccountService],
   controllers: [AccountController],

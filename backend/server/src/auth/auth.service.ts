@@ -142,10 +142,20 @@ export class AuthService {
   async logout(refreshToken: string) {
     const hash = this.hashToken(refreshToken);
 
-    await this.refreshModel.updateOne(
+    const session = await this.refreshModel.findOneAndUpdate(
       { refresh_token_hash: hash },
       { revoked: true },
     );
+
+    // Вместе с сессией снимаем пуш-токен: иначе после выхода уведомления
+    // этого аккаунта продолжали бы приходить на телефон, где уже сидит
+    // кто-то другой. Новый владелец пришлёт свой токен при входе
+    if (session?.account_id) {
+      await this.accountModel.updateOne(
+        { _id: session.account_id },
+        { $set: { fcm_token: null } },
+      );
+    }
 
     return { success: true };
   }

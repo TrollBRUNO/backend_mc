@@ -5,15 +5,9 @@ import { AccountRole } from '../auth/roles';
 
 export type AccountDocument = Account & Document;
 
-// Пороги джекпота — границы ползунков в приложении и значения по умолчанию.
-// Держим их на бэке: именно по порогу решается, слать ли пуш
-// (TasksService.jackpotThresholdCheck), а клиент присылает что угодно
-export const JACKPOT_THRESHOLD_LIMITS = {
-  mini:   { min: 0, max: 1000 },
-  middle: { min: 0, max: 5000 },
-  mega:   { min: 0, max: 10000 },
-} as const;
-
+// Значения порогов у нового аккаунта. Границы, в которых их вообще можно
+// выставить, лежат не здесь: их задаёт админ (JackpotSettingsService),
+// потому что пулы у залов меняются вместе с самими залами
 export const JACKPOT_THRESHOLD_DEFAULTS = {
   mini: 100,
   middle: 500,

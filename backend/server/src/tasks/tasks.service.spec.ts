@@ -43,10 +43,16 @@ describe('TasksService — пересечение порога джекпота'
   const PLOVDIV = { lat: 42.14, lng: 24.75 };
   const KIRKOVO = { lat: 41.34, lng: 25.36 };
 
+  type Levels = {
+    mini: number | null;
+    middle: number | null;
+    mega: number | null;
+  };
+
   const snapshot = (
     casinoId: Types.ObjectId,
-    previous: { mini: number; middle: number; mega: number } | null,
-    current: { mini: number; middle: number; mega: number },
+    previous: Levels | null,
+    current: Levels,
     coords: { lat: number; lng: number } | null = null,
     brand: string = 'Magic City',
     cityName: string = 'Plovdiv',
@@ -61,10 +67,19 @@ describe('TasksService — пересечение порога джекпота'
     current,
   });
 
-  const grew = { previous: { mini: 90, middle: 200, mega: 900 }, current: { mini: 120, middle: 200, mega: 900 } };
+  // Подбор залов крон считает по полному списку казино, а не по снапшотам.
+  // В тестах списки совпадают, поэтому собираем аудиторию из тех же данных
+  const audienceOf = (snapshots: any[]) =>
+    snapshots.map(s => ({
+      casinoId: String(s.casinoId),
+      name: s.name,
+      city: s.city,
+      latitude: s.latitude,
+      longitude: s.longitude,
+    }));
 
-  const find = (u: any, snapshots: any[]) =>
-    (service as any).findBestCrossing(u, snapshots);
+  const find = (u: any, snapshots: any[], audience = audienceOf(snapshots)) =>
+    (service as any).findBestCrossing(u, snapshots, audience);
 
   it('шлёт, когда джекпот дорос до порога', () => {
     const result = find(user(), [
@@ -120,4 +135,89 @@ describe('TasksService — пересечение порога джекпота'
     expect(result?.value).toBe(2500);
   });
 
+  // Источник может отдать меньше трёх пулов или ноль у неинициализированного:
+  // такой уровень приходит null и в сравнении не участвует
+  it('пропускает уровень без замера, но видит пересечение на соседнем', () => {
+    const result = find(user(), [
+      snapshot(
+        casinoA,
+        { mini: 90, middle: null, mega: null },
+        { mini: 120, middle: null, mega: null },
+      ),
+    ]);
+
+    expect(result?.type).toBe(NotificationLogType.JACKPOT_MINI);
+  });
+
+  it('не шлёт по уровню, которого у источника нет', () => {
+    const result = find(user(), [
+      snapshot(
+        casinoA,
+        { mini: null, middle: null, mega: 1900 },
+        { mini: null, middle: null, mega: 1950 },
+      ),
+    ]);
+
+    expect(result).toBeNull();
+  });
+
+  // Города и сети из регистрации пересекаются: MegaBet в Кирково подходит,
+  // Magic City в Пловдиве — нет, хотя город тоже выбран
+  it('молчит про зал, не прошедший по выбору городов и сетей', () => {
+    const plovdiv = snapshot(
+      casinoA,
+      { mini: 90, middle: 200, mega: 900 },
+      { mini: 120, middle: 200, mega: 900 },
+      PLOVDIV,
+      'Magic City',
+      'Plovdiv',
+    );
+    const kirkovo = snapshot(
+      casinoB,
+      { mini: 90, middle: 200, mega: 900 },
+      { mini: 95, middle: 600, mega: 900 },
+      KIRKOVO,
+      'MegaBet',
+      'Kirkovo',
+    );
+
+    const result = find(
+      user({ preference: { cities: ['Plovdiv', 'Kirkovo'], brands: ['MegaBet'] } }),
+      [plovdiv, kirkovo],
+    );
+
+    expect(result?.type).toBe(NotificationLogType.JACKPOT_MIDDLE);
+    expect(String(result?.casinoId)).toBe(String(casinoB));
+  });
+
+  // Зал, чей джекпот-сервер не ответил, выпадает из снапшотов, но не из
+  // подбора: иначе выбор пользователя схлопнулся бы и его подменила геопозиция
+  it('не расширяет подбор залов, когда источник зала не ответил', () => {
+    const plovdiv = snapshot(
+      casinoA,
+      { mini: 90, middle: 200, mega: 900 },
+      { mini: 120, middle: 200, mega: 900 },
+      PLOVDIV,
+      'Magic City',
+      'Plovdiv',
+    );
+    const kirkovoOffline = {
+      casinoId: String(casinoC),
+      name: { en: 'MegaBet' },
+      city: { en: 'Kirkovo' },
+      latitude: KIRKOVO.lat,
+      longitude: KIRKOVO.lng,
+    };
+
+    const result = find(
+      user({
+        preference: { cities: ['Kirkovo'], brands: ['MegaBet'] },
+        location: { ...PLOVDIV, updated_at: new Date() },
+      }),
+      [plovdiv],
+      [...audienceOf([plovdiv]), kirkovoOffline],
+    );
+
+    expect(result).toBeNull();
+  });
 });
