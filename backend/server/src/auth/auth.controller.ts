@@ -9,7 +9,8 @@ import {
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ConfigService } from '@nestjs/config';
-import { Throttle } from '@nestjs/throttler';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
+import { timingSafeEqual } from 'crypto';
 
 @Controller('auth')
 export class AuthController {
@@ -25,13 +26,17 @@ export class AuthController {
     return this.authService.login(dto, req);
   }
 
+  // Обновление токенов не держим под общим лимитом: под ним сидят все
+  // игроки одного Wi-Fi зала, а отказ 429 старые версии приложения
+  // принимали за конец сессии и разлогинивали
+  @SkipThrottle({ global: true })
   @Post('refresh')
-  refresh(@Body('refresh_token') token: string) {
+  refresh(@Body('refresh_token') token: string, @Req() req) {
     if (!token) {
       throw new BadRequestException('REFRESH_TOKEN_REQUIRED');
     }
 
-    return this.authService.refresh(token);
+    return this.authService.refresh(token, req);
   }
 
   @Post('logout')
@@ -43,17 +48,24 @@ export class AuthController {
     return this.authService.logout(token);
   }
 
+  // Ни присланный, ни настоящий код в лог не пишем: раньше здесь
+  // печатался ADMIN_SECRET_CODE, и его видел любой с доступом к логам
+  @Throttle({ global: { ttl: 60000, limit: 10 } })
   @Post('admin-verify')
   async verifyAdmin(@Body('code') code: string) {
     const adminCode = this.configService.get<string>('ADMIN_SECRET_CODE');
 
-    console.log('Expected:', code); 
-    console.log('Actual:', this.configService.get<string>('ADMIN_SECRET_CODE'));
-
-    if (code === adminCode) {
-      return { ok: true };
+    // Без заданного кода не пускаем никого: иначе запрос без кода
+    // совпал бы с пустой настройкой
+    if (!adminCode || typeof code !== 'string') {
+      return { ok: false };
     }
 
-    return { ok: false };
+    const given = Buffer.from(code);
+    const expected = Buffer.from(adminCode);
+
+    return {
+      ok: given.length === expected.length && timingSafeEqual(given, expected),
+    };
   }
 }
