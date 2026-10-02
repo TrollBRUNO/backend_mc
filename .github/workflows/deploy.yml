@@ -32,5 +32,7 @@ jobs:
           port: ${{ secrets.VPS_PORT }}
           script: |
             cd /home/linuxuser/backend_mc/backend/server
-            docker compose down
+            # Без down: новый образ собирается, пока старый сервер работает,
+            # и контейнер подменяется за секунды. С down сервер лежал всю
+            # сборку, а приложение в это время разлогинивало игроков
             docker compose up -d --build
