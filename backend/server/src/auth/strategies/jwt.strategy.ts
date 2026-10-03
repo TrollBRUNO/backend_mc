@@ -33,11 +33,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: any) {
     const account = await this.accountModel
       .findById(payload.sub)
-      .select('role is_blocked token_version')
+      .select('role is_blocked token_version deleted_at')
       .lean();
 
     if (!account) throw new UnauthorizedException('ACCOUNT_NOT_FOUND');
     if (account.is_blocked) throw new UnauthorizedException('ACCOUNT_BLOCKED');
+    if (account.deleted_at) throw new UnauthorizedException('ACCOUNT_DELETED');
 
     // Сброс пароля админом поднимает token_version — старые токены умирают
     if ((account.token_version ?? 0) !== (payload.token_version ?? 0)) {

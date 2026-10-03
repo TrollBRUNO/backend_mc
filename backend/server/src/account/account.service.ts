@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import mongoose, { Model, Types } from 'mongoose';
 import {
@@ -15,6 +20,21 @@ import { Casino, CasinoDocument } from '../casino/casino.schema';
 import { formatCardId, isValidCardId, normalizeCardId } from './card-id.util';
 import { resolveJackpotAudience } from '../jackpot-audience/jackpot-audience.util';
 import * as bcrypt from 'bcrypt';
+import { Locale } from '../push/push-locales';
+import {
+  IDENTITY_FIELD,
+  VerifiedIdentity,
+  accountCreatedAt,
+  emailFieldOf,
+  escapeRegex,
+  isDuplicateKeyError,
+  loginMethodsOf,
+  phoneSearchDigits,
+} from './identity.util';
+import { generateNickname } from './nickname.util';
+
+type CardInput = { card_id: string; casino_id: string; active?: boolean };
+type PreferenceInput = { cities?: string[]; brands?: string[] } | null;
 
 @Injectable()
 export class AccountService {
@@ -24,8 +44,31 @@ export class AccountService {
     private readonly jackpotSettings: JackpotSettingsService,
   ) {}
 
-  async findAll(): Promise<Account[]> {
-    return this.accountModel.find().sort({ create_date: -1 }).exec();
+  async findAll() {
+    const accounts = await this.accountModel.find().sort({ create_date: -1 }).lean();
+    return accounts.map(acc => this.toAdminView(acc));
+  }
+
+  // Аккаунт для админки: без хеша пароля, зато со способами входа, датой
+  // регистрации и статусом удаления. Остальные поля остаются как были —
+  // старая админка читает их напрямую
+  private toAdminView(acc: any) {
+    const { password, deleted_snapshot, ...rest } = acc;
+    const { password_hash: _hash, ...snapshot } = deleted_snapshot ?? {};
+
+    return {
+      ...rest,
+      id: String(acc._id),
+      realname: acc.realname ?? '',
+      has_password: !!password,
+      login_methods: loginMethodsOf(acc),
+      registration_method: acc.registration_method ?? null,
+      created_at: accountCreatedAt(acc),
+      last_login_at: acc.last_login_at ?? null,
+      is_deleted: !!acc.deleted_at,
+      deleted_at: acc.deleted_at ?? null,
+      deleted_snapshot: deleted_snapshot ? snapshot : null,
+    };
   }
 
   async findOne(id: string): Promise<Account> {
@@ -103,41 +146,35 @@ export class AccountService {
   async register(dto: {
     login: string;
     password: string;
-    realname: string;
-    cards?: {
-      card_id: string;
-      casino_id: string;
-      active: boolean;
-    }[];
-    notification_preference?: { cities?: string[]; brands?: string[] } | null;
+    // Новое приложение имя не спрашивает, старые версии ещё присылают
+    realname?: string;
+    cards?: CardInput[];
+    notification_preference?: PreferenceInput;
     // role из тела запроса игнорируется, см. ниже
     role?: string;
     locale?: string;
   }) {
-    // 1️⃣ username уникален
+    // 1️⃣ username уникален. Префикс deleted_ занят логинами удалённых
+    // аккаунтов
     const loginExists = await this.accountModel.findOne({
       login: dto.login,
     });
 
-    if (loginExists) {
+    if (loginExists || dto.login.toLowerCase().startsWith('deleted_')) {
       throw new BadRequestException('USERNAME_TAKEN');
     }
 
     // 2️⃣ карта уникальна в своём зале
-    const cards = await Promise.all(
-      (dto.cards ?? []).map(card => this.buildCard(card)),
-    );
-
-    for (const card of cards) {
-      await this.checkCardAvailability(card.card_id, String(card.casino_id));
-    }
+    const cards = await this.prepareCards(dto.cards);
 
     const hash = await bcrypt.hash(dto.password, 10);
 
     const account = new this.accountModel({
       login: dto.login,
       password: hash,
-      realname: dto.realname,
+      realname: dto.realname ?? '',
+      registration_method: 'password',
+      created_at: new Date(),
       cards,
       // Публичная регистрация всегда создаёт обычного пользователя.
       // Роль из тела запроса не берём: иначе кто угодно мог бы прислать
@@ -155,6 +192,73 @@ export class AccountService {
     await account.save();
 
     return { success: true };
+  }
+
+  // Регистрация через Google, Apple или телефон. Имя не спрашиваем, логин —
+  // сгенерированный ник (сменить можно в настройках), пароля нет, пока
+  // человек не задаст его сам
+  async registerWithIdentity(
+    identity: VerifiedIdentity,
+    dto: {
+      cards?: CardInput[];
+      notification_preference?: PreferenceInput;
+      locale?: string;
+    },
+  ): Promise<AccountDocument> {
+    const field = IDENTITY_FIELD[identity.provider];
+
+    if (await this.accountModel.exists({ [field]: identity.subject })) {
+      throw new ConflictException('IDENTITY_TAKEN');
+    }
+
+    const cards = await this.prepareCards(dto.cards);
+    const emailField = emailFieldOf(identity.provider);
+    const locale = (Object.values(Locale) as string[]).includes(dto.locale ?? '')
+      ? dto.locale
+      : Locale.BG;
+
+    // Ник могла занять параллельная регистрация — тогда берём другой
+    for (let attempt = 0; ; attempt++) {
+      const login = await generateNickname(
+        async candidate => !!(await this.accountModel.exists({ login: candidate })),
+      );
+
+      try {
+        return await this.accountModel.create({
+          login,
+          realname: '',
+          [field]: identity.subject,
+          ...(emailField ? { [emailField]: identity.email ?? null } : {}),
+          registration_method: identity.provider,
+          created_at: new Date(),
+          cards,
+          role: AccountRole.USER,
+          locale,
+          notification_preference: this.buildNotificationPreference(
+            dto.notification_preference,
+          ),
+        });
+      } catch (error) {
+        if (!isDuplicateKeyError(error)) throw error;
+
+        // Тот же Google, Apple или номер успели зарегистрировать параллельно
+        const key = Object.keys((error as any).keyPattern ?? {})[0];
+        if (key === field) throw new ConflictException('IDENTITY_TAKEN');
+        if (attempt >= 2) throw error;
+      }
+    }
+  }
+
+  // Карты из формы регистрации: каноническая форма и проверка, что карта
+  // в своём зале ещё ни к кому не привязана
+  private async prepareCards(input?: CardInput[]) {
+    const cards = await Promise.all((input ?? []).map(card => this.buildCard(card)));
+
+    for (const card of cards) {
+      await this.checkCardAvailability(card.card_id, String(card.casino_id));
+    }
+
+    return cards;
   }
 
   async generateBonusCode(accountId: string): Promise<string> {
@@ -498,6 +602,16 @@ export class AccountService {
       role: acc.role,
       google_id: acc.google_id,
       apple_id: acc.apple_id,
+      google_email: acc.google_email ?? null,
+      apple_email: acc.apple_email ?? null,
+      phone: acc.phone ?? null,
+      has_password: !!acc.password,
+      login_methods: loginMethodsOf(acc),
+      registration_method: acc.registration_method ?? null,
+      created_at: accountCreatedAt(acc),
+      last_login_at: acc.last_login_at ?? null,
+      is_deleted: !!acc.deleted_at,
+      deleted_at: acc.deleted_at ?? null,
 
       cards: acc.cards,
 
@@ -535,29 +649,45 @@ export class AccountService {
     }
 
     async search(query: string) {
-    const regex = new RegExp(query, 'i');
+    // Запрос экранируем: раньше он шёл в RegExp как есть, и поиск
+    // по «+359…» падал на «+» с ошибкой 500
+    const text = String(query ?? '').trim();
+    const regex = new RegExp(escapeRegex(text), 'i');
 
     // Номер карты ищем ещё и по канонической форме, чтобы админ находил её
     // в любом написании. Пустая каноническая форма (искали по имени, а не
     // по карте) дала бы регексп //, совпадающий со всеми — такой пункт не добавляем
-    const normalized = normalizeCardId(query);
+    const normalized = normalizeCardId(text);
 
-    return this.accountModel.find({
+    // Телефон — в любом виде: +359 888…, 0888…, 888…
+    const phoneDigits = phoneSearchDigits(text);
+    const phoneRegex = phoneDigits ? new RegExp(phoneDigits) : null;
+
+    const accounts = await this.accountModel.find({
       $or: [
         { login: regex },
         { realname: regex },
         { 'cards.card_id': regex },
         ...(normalized ? [{ 'cards.card_id_norm': new RegExp(normalized, 'i') }] : []),
         { 'cards.city': regex },
+        { google_email: regex },
+        { apple_email: regex },
+        ...(phoneRegex ? [{ phone: phoneRegex }] : []),
+        // Удалённые находятся по тому, что было у них до удаления
+        { 'deleted_snapshot.login': regex },
+        ...(phoneRegex ? [{ 'deleted_snapshot.phone': phoneRegex }] : []),
       ]
     }).lean();
+
+    return accounts.map(acc => this.toAdminView(acc));
   }
 
   async sort(field: string, direction: 'asc' | 'desc') {
     const sortObj: any = {};
     sortObj[field] = direction === 'asc' ? 1 : -1;
 
-    return this.accountModel.find().sort(sortObj).lean();
+    const accounts = await this.accountModel.find().sort(sortObj).lean();
+    return accounts.map(acc => this.toAdminView(acc));
   }
 
   async updateCard(accountId: string, cardId: string, dto: { card_id?: string; casino_id?: string; active?: boolean }) {

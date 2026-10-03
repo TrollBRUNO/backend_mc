@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { AuthSettingsService } from './auth-settings.service';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -15,6 +16,7 @@ describe('AuthController', () => {
       providers: [
         { provide: AuthService, useValue: {} },
         { provide: ConfigService, useValue: { get: () => adminCode } },
+        { provide: AuthSettingsService, useValue: {} },
       ],
     }).compile();
 
