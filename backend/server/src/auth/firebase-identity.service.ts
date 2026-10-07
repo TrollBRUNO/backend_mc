@@ -27,7 +27,30 @@ export class FirebaseIdentityService {
       throw error;
     }
 
-    return identityFromToken(decoded);
+    const identity = identityFromToken(decoded);
+
+    if (identity.provider !== 'phone' && !identity.email) {
+      identity.email = await this.providerEmail(decoded.uid, identity.provider);
+    }
+
+    return identity;
+  }
+
+  // В режиме «несколько аккаунтов на одну почту» (так настроен проект)
+  // Firebase не кладёт почту ни в пользователя, ни в токен — она есть
+  // только в данных провайдера. Почта нужна лишь админке, поэтому сбой
+  // здесь вход не ломает
+  private async providerEmail(
+    uid: string,
+    provider: 'google' | 'apple',
+  ): Promise<string | null> {
+    try {
+      const user = await getFirebaseApp().auth().getUser(uid);
+      const providerId = provider === 'google' ? 'google.com' : 'apple.com';
+      return user.providerData.find(p => p.providerId === providerId)?.email ?? null;
+    } catch {
+      return null;
+    }
   }
 }
 

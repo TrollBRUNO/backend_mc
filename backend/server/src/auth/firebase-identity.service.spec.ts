@@ -1,4 +1,49 @@
-import { identityFromToken } from './firebase-identity.service';
+import {
+  FirebaseIdentityService,
+  identityFromToken,
+} from './firebase-identity.service';
+import { getFirebaseApp } from '../firebase/firebase-app';
+
+jest.mock('../firebase/firebase-app', () => ({ getFirebaseApp: jest.fn() }));
+
+describe('FirebaseIdentityService.verify', () => {
+  const googleToken = {
+    uid: 'firebase-uid',
+    firebase: { sign_in_provider: 'google.com', identities: { 'google.com': ['g-1'] } },
+  };
+
+  const mockFirebase = (getUser: () => Promise<any>) =>
+    (getFirebaseApp as jest.Mock).mockReturnValue({
+      auth: () => ({ verifyIdToken: async () => googleToken, getUser }),
+    });
+
+  it('почту берёт у провайдера, когда в токене её нет (режим нескольких аккаунтов)', async () => {
+    mockFirebase(async () => ({
+      providerData: [
+        { providerId: 'apple.com', email: 'other@icloud.com' },
+        { providerId: 'google.com', email: 'ivan@gmail.com' },
+      ],
+    }));
+
+    await expect(new FirebaseIdentityService().verify('id-token')).resolves.toEqual({
+      provider: 'google',
+      subject: 'g-1',
+      email: 'ivan@gmail.com',
+    });
+  });
+
+  it('сбой при чтении пользователя вход не ломает — просто без почты', async () => {
+    mockFirebase(async () => {
+      throw new Error('network');
+    });
+
+    await expect(new FirebaseIdentityService().verify('id-token')).resolves.toMatchObject({
+      provider: 'google',
+      subject: 'g-1',
+      email: null,
+    });
+  });
+});
 
 const token = (provider: string, extra: Record<string, any> = {}) =>
   ({
