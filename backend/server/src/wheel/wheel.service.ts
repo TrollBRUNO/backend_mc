@@ -7,8 +7,7 @@ import { Wheel, WheelDocument } from './wheel.schema';
 import { DemoSpin, DemoSpinDocument } from './demo-spin.schema';
 import { CreateWheelDto } from './dto/create-wheel.dto';
 import { UpdateWheelDto } from './dto/update-wheel.dto';
-
-const DEMO_PRIZES = [10, 10, 10, 10, 15, 15, 20, 20, 25, 25, 40, 50, 100];
+import { randomItem, sameWheel, sectorsOf } from './wheel-prize.util';
 
 @Injectable()
 export class WheelService {
@@ -87,6 +86,16 @@ export class WheelService {
       spin_date: now,
     };
   } */
+  // Значения секторов колеса из админки — то же, что отдаёт GET /wheel
+  private async wheelValues(): Promise<number[]> {
+    const docs = await this.wheelModel.find().lean().exec();
+    const values = docs
+      .map(d => Number(d.value))
+      .filter(v => Number.isFinite(v) && v > 0);
+    if (values.length === 0) throw new BadRequestException('WHEEL_EMPTY');
+    return values;
+  }
+
   async spin(accountId: string, wheel: number[]) {
     const account = await this.accountModel.findById(accountId);
     if (!account) throw new NotFoundException('Account not found');
@@ -101,8 +110,16 @@ export class WheelService {
       }
     }
 
-    const index = Math.floor(Math.random() * wheel.length);
-    const prize = wheel[index];
+    // Проверка до розыгрыша, иначе отказ по выпавшему призу позволил бы
+    // крутить, пока не выпадет нужное. Колесо клиента расходится с БД, когда
+    // админ поменял секторы, — приложению надо перезагрузить колесо
+    const values = await this.wheelValues();
+    if (!sameWheel(wheel, values)) {
+      throw new BadRequestException('WHEEL_OUTDATED');
+    }
+
+    const prize = randomItem(values);
+    const index = randomItem(sectorsOf(wheel, prize));
 
     const currentBonus = Number(account.bonus_balance ?? 0);
     account.bonus_balance = (currentBonus + prize) as any;
@@ -127,7 +144,10 @@ export class WheelService {
     const existing = await this.demoSpinModel.findOne({ demo_id }).exec();
     if (existing) throw new BadRequestException('DEMO_ALREADY_USED');
 
-    const prize = DEMO_PRIZES[Math.floor(Math.random() * DEMO_PRIZES.length)];
+    // Только значения с колеса: приложение ищет сектор с выпавшей суммой, и
+    // при отдельном списке призов (10, 15, 20, 40) не находило его и
+    // показывало первый сектор — 25, а начислялось меньше
+    const prize = randomItem(await this.wheelValues());
     await this.demoSpinModel.create({ demo_id, amount: prize });
 
     return { amount: prize };
