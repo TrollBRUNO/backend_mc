@@ -16,6 +16,7 @@ import {
 } from '../jackpot-state/jackpot-levels.util';
 import { PushType } from '../push/push-locales';
 import { AudienceCasino, enabledCasinoIds } from '../jackpot-audience/jackpot-audience.util';
+import { SPIN_PRIZE_TTL_MS, WheelStatsService } from '../statistics/wheel-stats.service';
 
 // Уровни джекпота от младшего к старшему. weight решает, о каком из
 // одновременно пересечённых уровней сообщить: интереснее всегда старший
@@ -65,13 +66,18 @@ export class TasksService {
     private readonly casinoService: CasinoService,
     private readonly notificationLogService: NotificationLogService,
     private readonly jackpotStateService: JackpotStateService,
+    private readonly wheelStats: WheelStatsService,
   ) {}
 
   // Каждую минуту
   @Cron('* * * * *')
   async resetExpiredBonuses() {
     const now = new Date();
-    const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const cutoff = new Date(now.getTime() - SPIN_PRIZE_TTL_MS);
+
+    // Учёт колеса: не забранные за сутки выигрыши — сгоревшие
+    const burnt = await this.wheelStats.expireStale(now);
+    if (burnt) this.logger.log(`Wheel prizes expired: ${burnt}`);
 
     const expired = await this.accountModel.find({
       bonus_balance: { $gt: 0 },

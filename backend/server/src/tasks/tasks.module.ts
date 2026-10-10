@@ -6,6 +6,7 @@ import { TasksService } from "./tasks.service";
 import { PushModule } from "../push/push.module";
 import { NotificationLogModule } from "../notification-log/notification-log.module";
 import { JackpotStateModule } from "../jackpot-state/jackpot-state.module";
+import { StatisticsModule } from "../statistics/statistics.module";
 
 @Module({
   imports: [
@@ -14,6 +15,8 @@ import { JackpotStateModule } from "../jackpot-state/jackpot-state.module";
     PushModule,
     NotificationLogModule,
     JackpotStateModule,
+    // Сгоревшие за сутки выигрыши колеса отмечаются в учёте
+    StatisticsModule,
   ],
   providers: [TasksService],
   exports: [TasksService],

@@ -4,13 +4,16 @@ import { BonusCodeController } from './bonus-code.controller';
 import { MongooseModule } from '@nestjs/mongoose';
 import { BonusCode, BonusCodeSchema } from './bonus-code.schema';
 import { Account, AccountSchema } from '../account/account.schema';
+import { StatisticsModule } from '../statistics/statistics.module';
 
 @Module({
   imports: [
         MongooseModule.forFeature([
           { name: BonusCode.name, schema: BonusCodeSchema },
           { name: Account.name, schema: AccountSchema },
-        ])
+        ]),
+        // Погашение кода отмечает выигрыши колеса забранными
+        StatisticsModule,
       ],
   providers: [BonusCodeService],
   controllers: [BonusCodeController]

@@ -32,6 +32,7 @@ import {
   phoneSearchDigits,
 } from './identity.util';
 import { generateNickname } from './nickname.util';
+import { WheelStatsService } from '../statistics/wheel-stats.service';
 
 type CardInput = { card_id: string; casino_id: string; active?: boolean };
 type PreferenceInput = { cities?: string[]; brands?: string[] } | null;
@@ -42,6 +43,7 @@ export class AccountService {
     @InjectModel(Account.name) private accountModel: Model<AccountDocument>,
     @InjectModel(Casino.name) private casinoModel: Model<CasinoDocument>,
     private readonly jackpotSettings: JackpotSettingsService,
+    private readonly wheelStats: WheelStatsService,
   ) {}
 
   async findAll() {
@@ -323,6 +325,9 @@ export class AccountService {
     account.bonus_code_expire = null;
 
     await account.save();
+
+    // Учёт колеса: выигрыш забрали — по этой карте, в её зале
+    await this.wheelStats.markClaimed(accountId, card);
 
     return {
       success: true,

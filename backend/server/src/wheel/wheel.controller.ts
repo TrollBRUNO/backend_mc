@@ -74,14 +74,12 @@ export class WheelController {
   }
 
   // ---------- SPIN ----------
+  // Приложение по-прежнему присылает своё колесо в теле — его не читаем:
+  // значения сервер берёт из базы, иначе выигрыш выбирал бы сам клиент
   @UseGuards(JwtAuthGuard)
   @Post('spin')
-  async spin(@Req() req, @Body('wheel') wheel: number[]) {
-    if (!Array.isArray(wheel) || wheel.length === 0) {
-      throw new BadRequestException('wheel is required');
-    }
-
-    return this.wheelService.spin(req.user.sub, wheel);
+  async spin(@Req() req) {
+    return this.wheelService.spin(req.user.sub);
   }
 
   // ---------- DEMO STATUS ----------

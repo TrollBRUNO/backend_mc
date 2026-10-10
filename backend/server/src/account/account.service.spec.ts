@@ -7,6 +7,7 @@ import { Account } from './account.schema';
 import { Casino } from '../casino/casino.schema';
 import { JackpotSettingsService } from '../jackpot-settings/jackpot-settings.service';
 import { NICKNAME_BASES } from './nickname.util';
+import { WheelStatsService } from '../statistics/wheel-stats.service';
 
 describe('AccountService', () => {
   let service: AccountService;
@@ -29,6 +30,7 @@ describe('AccountService', () => {
         { provide: getModelToken(Account.name), useValue: accountModel },
         { provide: getModelToken(Casino.name), useValue: {} },
         { provide: JackpotSettingsService, useValue: {} },
+        { provide: WheelStatsService, useValue: {} },
       ],
     }).compile();
 
