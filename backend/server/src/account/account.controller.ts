@@ -171,7 +171,9 @@ export class AccountController {
   async register(@Body() dto: any) {
     const { login, password, realname, cards, role, locale, notification_preference } = dto;
 
-    if (!login || !password || !realname) {
+    // Имя необязательно: новое приложение его не спрашивает,
+    // старые версии по-прежнему присылают
+    if (!login || !password) {
       throw new BadRequestException('MISSING_FIELDS');
     }
 

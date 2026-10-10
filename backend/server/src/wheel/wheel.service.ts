@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Account, AccountDocument } from '../account/account.schema';
-import { Statistics, StatisticsDocument } from '../statistics/statistics.schema';
+import { WheelStatsService } from '../statistics/wheel-stats.service';
 import { Wheel, WheelDocument } from './wheel.schema';
 import { DemoSpin, DemoSpinDocument } from './demo-spin.schema';
 import { CreateWheelDto } from './dto/create-wheel.dto';
@@ -14,8 +14,8 @@ export class WheelService {
   constructor(
     @InjectModel(Wheel.name) private wheelModel: Model<WheelDocument>,
     @InjectModel(Account.name) private accountModel: Model<AccountDocument>,
-    @InjectModel(Statistics.name) private statModel: Model<StatisticsDocument>,
     @InjectModel(DemoSpin.name) private demoSpinModel: Model<DemoSpinDocument>,
+    private readonly wheelStats: WheelStatsService,
   ) {}
 
   async findAll(): Promise<Wheel[]> {
@@ -127,11 +127,7 @@ export class WheelService {
 
     await account.save();
 
-    await this.statModel.create({
-      user_id: accountId,
-      prize_count: prize,
-      spin_date: now,
-    });
+    await this.wheelStats.recordSpin(accountId, prize, 'spin', now);
 
     return {
       index,
@@ -173,11 +169,7 @@ export class WheelService {
 
     await account.save();
 
-    await this.statModel.create({
-      user_id: accountId,
-      prize_count: demoSpin.amount,
-      spin_date: now,
-    });
+    await this.wheelStats.recordSpin(accountId, demoSpin.amount, 'demo', now);
 
     await this.demoSpinModel.deleteOne({ demo_id }).exec();
 

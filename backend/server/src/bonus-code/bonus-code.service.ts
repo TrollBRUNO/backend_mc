@@ -4,12 +4,14 @@ import { Model } from 'mongoose';
 import { Account, AccountDocument } from '../account/account.schema';
 import { normalizeCardId } from '../account/card-id.util';
 import { BonusCode, BonusCodeDocument } from './bonus-code.schema';
+import { WheelStatsService } from '../statistics/wheel-stats.service';
 
 @Injectable()
 export class BonusCodeService {
     constructor(
         @InjectModel(BonusCode.name) private bonusCodeModel: Model<BonusCodeDocument>,
         @InjectModel(Account.name) private accountModel: Model<AccountDocument>,
+        private readonly wheelStats: WheelStatsService,
     ) {}
 
     /* async generateBonusCode(accountId: string) {
@@ -120,6 +122,9 @@ export class BonusCodeService {
         //Пометить код использованным
         bonus.used = true;
         await bonus.save();
+
+        // Учёт колеса: выигрыш забрали — по этой карте, в её зале
+        await this.wheelStats.markClaimed(String(account._id), card);
 
         return {
             success: true,

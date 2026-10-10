@@ -1,24 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import * as admin from 'firebase-admin'; 
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import * as admin from 'firebase-admin';
+import { getFirebaseApp } from '../firebase/firebase-app';
 import { getPushPayload, PushParams, PushPayload, PushType } from './push-locales';
 
 @Injectable()
 export class PushService {
   constructor() {
-    const serviceAccount = JSON.parse(
-      readFileSync(
-        join(__dirname, '..', '..', 'firebase', 'magiccity-6e868-firebase-adminsdk-mt1r6-c2f5a7593f.json'),
-        'utf8',
-      ),
-    );
-
-    if (!admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-      });
-    }
+    getFirebaseApp();
   }
 
   async send(

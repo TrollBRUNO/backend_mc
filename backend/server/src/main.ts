@@ -34,6 +34,13 @@ import { join } from 'path';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
+  // Сервер стоит за nginx, и без этого req.ip у каждого запроса был адресом
+  // nginx. Лимиты ThrottlerGuard считались на всех игроков разом: 400
+  // запросов в минуту на всё приложение и 20 входов в минуту на всех.
+  // Доверяем X-Forwarded-For только от адресов внутренних сетей (там nginx),
+  // так что снаружи подставить себе чужой IP не выйдет
+  app.set('trust proxy', 'loopback, linklocal, uniquelocal');
+
   app.enableCors({
     origin: '*',
     methods: '*',

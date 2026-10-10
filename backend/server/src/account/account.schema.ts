@@ -28,9 +28,13 @@ export class Account {
   @Prop({ unique: true, index: true })
   login: string;
 
-  @Prop()
-  password: string;
+  // bcrypt-хеш. У тех, кто пришёл через Google, Apple или телефон, его нет,
+  // пока человек сам не задаст пароль в настройках
+  @Prop({ type: String, default: null })
+  password: string | null;
 
+  // Новые аккаунты имени не спрашивают и пишут сюда пустую строку:
+  // список аккаунтов в админке ждёт здесь строку
   @Prop()
   realname: string;
 
@@ -48,11 +52,48 @@ export class Account {
   @Prop({ type: Date, default: null })
   last_activity_at: Date | null;
 
-  @Prop({ type: String, default: null, sparse: true})
+  // Способы входа помимо пароля. Уникальность держат частичные индексы
+  // внизу файла. Id приходят только из проверенного токена Firebase
+  @Prop({ type: String, default: null })
   google_id: string | null;
 
-  @Prop({ type: String, default: null, sparse: true})
+  @Prop({ type: String, default: null })
+  google_email: string | null;
+
+  @Prop({ type: String, default: null })
   apple_id: string | null;
+
+  // Может быть адресом-пересыльщиком Apple (…@privaterelay.appleid.com),
+  // если человек скрыл настоящую почту
+  @Prop({ type: String, default: null })
+  apple_email: string | null;
+
+  // Подтверждённый по SMS болгарский номер, +3598XXXXXXXX
+  @Prop({ type: String, default: null })
+  phone: string | null;
+
+  // Как аккаунт заведён: password, google, apple, phone.
+  // null — старые аккаунты, заведённые до появления поля
+  @Prop({ type: String, default: null })
+  registration_method: string | null;
+
+  // Без default: иначе mongoose подставил бы «сейчас» старому аккаунту
+  // при первом же save. У старых дата регистрации берётся из _id
+  @Prop({ type: Date })
+  created_at?: Date;
+
+  // Последняя выдача токенов: вход или запуск приложения
+  @Prop({ type: Date, default: null })
+  last_login_at: Date | null;
+
+  // Удалённый аккаунт остаётся в базе для истории, но логин, способы входа
+  // и карты освобождаются — под ними может зарегистрироваться кто угодно.
+  // Что было до удаления, лежит в deleted_snapshot для админки
+  @Prop({ type: Date, default: null })
+  deleted_at: Date | null;
+
+  @Prop({ type: Object, default: null })
+  deleted_snapshot: Record<string, any> | null;
 
   @Prop({ type: String, default: null })
   fcm_token: string;
@@ -211,3 +252,19 @@ export class Account {
 }
 
 export const AccountSchema = SchemaFactory.createForClass(Account);
+
+// Один Google, Apple или номер — один аккаунт. Индекс частичный: у почти
+// всех аккаунтов поле null, а обычный unique (и даже sparse — явный null
+// он тоже индексирует) счёл бы их дублями друг друга.
+// На проде старые sparse-индексы google_id_1 и apple_id_1 убирает миграция
+// migrations/2026-10-03-social-auth.mongosh.js
+for (const field of ['google_id', 'apple_id', 'phone']) {
+  AccountSchema.index(
+    { [field]: 1 },
+    {
+      name: `${field}_unique`,
+      unique: true,
+      partialFilterExpression: { [field]: { $type: 'string' } },
+    },
+  );
+}

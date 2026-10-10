@@ -21,6 +21,7 @@ describe('TasksService — пересечение порога джекпота'
     {} as any,
     {} as any,
     {} as any,
+    {} as any,
   );
 
   const user = (opts: {

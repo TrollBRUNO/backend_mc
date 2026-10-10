@@ -2,10 +2,12 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Account, AccountSchema } from './account.schema';
 import { AccountService } from './account.service';
+import { AccountIdentityService } from './account-identity.service';
 import { AccountController } from './account.controller';
 import { Casino, CasinoSchema } from '../casino/casino.schema';
 import { PushModule } from '../push/push.module';
 import { JackpotSettingsModule } from '../jackpot-settings/jackpot-settings.module';
+import { StatisticsModule } from '../statistics/statistics.module';
 
 @Module({
   imports: [
@@ -18,9 +20,11 @@ import { JackpotSettingsModule } from '../jackpot-settings/jackpot-settings.modu
     PushModule,
     // Рамки, в которые упираются пороги джекпота при записи настроек
     JackpotSettingsModule,
+    // Погашение бонуса отмечает выигрыши колеса забранными
+    StatisticsModule,
   ],
-  providers: [AccountService],
+  providers: [AccountService, AccountIdentityService],
   controllers: [AccountController],
-  exports: [AccountService, MongooseModule],
+  exports: [AccountService, AccountIdentityService, MongooseModule],
 })
 export class AccountModule {}
